@@ -165,6 +165,19 @@ class Main : public Scene{
             if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_e)
                     currloop=(Scene*)s;
+        if (e.type==SDL_KEYDOWN)
+                if (e.key.keysym.sym==SDLK_l){
+                    EM_ASM(
+                        _save();
+                        FS.syncfs(false,function (err) {
+                        if (err){
+                            console.log("Error at syncing:",err)
+                        }
+                        else{
+                            console.log("saved");
+                        }
+                    }));
+                }
         };
 
         SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
@@ -269,11 +282,12 @@ class Second : public Scene{
 };
 
 extern "C" void load(){
-    std::ifstream ff("/save/s.txt");
+    std::ofstream f("save/soo.txt", std::ios::app);
+    std::ifstream ff("/save/soo.txt");
     if (ff.is_open()){
         std::string g;
         ff>>g;
-        std::cout<<g<<std::endl;
+        std::cout<<"\nDATA IN FILE:"<<g<<std::endl;
     }
     else 
         std::cout<<"ERROR DURING OPENING s.txt"<<std::endl;
@@ -281,7 +295,7 @@ extern "C" void load(){
 }
 
 extern "C" void save(){
-    std::ofstream f("/save/s.txt");
+    std::ofstream f("/save/soo.txt");
     if (f.is_open()){
     f<<"hello";
     f.close();
@@ -304,7 +318,6 @@ int main(){
             else{
                 _load();
                 console.log("Loaded\n");
-                _save();
             }
         });
     );
@@ -314,15 +327,8 @@ int main(){
     win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
     rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
     v=Vid("frames",rend);
-    std::cout<<"loaded:"<<v.size();
     currloop=m;
     (*m).player->rect.x=200;
-    
-    
-
-    EM_ASM(
-        FS.syncfs(false,function (err) {})
-    );
 
     emscripten_set_main_loop(loop,0,1);
     return 0;
