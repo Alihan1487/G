@@ -4,9 +4,11 @@
 #include <emscripten.h>
 #include <vector>
 #include <iostream>
+#include <fstream>
 
 SDL_Renderer* rend;
 SDL_Window* win;
+float dt=0;
 
 class Vid{
     std::string name;
@@ -58,29 +60,270 @@ class Vid{
 
 Vid v;
 
-void loop(){
-    SDL_Event ev;
-    while (SDL_PollEvent(&ev)){
-        if (ev.type==SDL_QUIT)
-            emscripten_cancel_main_loop();
-    }
+class Sprite{
+    public:
+    SDL_Rect rect;
+    virtual void update(){};
+    virtual void evupdate(){};
+};
 
-    SDL_SetRenderDrawColor(rend,0,0,0,255);
-    SDL_RenderClear(rend);
-    {
-        SDL_Rect d{0,0,300,300};
-        SDL_RenderCopy(rend,v.Get(),nullptr,&d);
+class Scene{
+    public:
+    Sprite* player;
+    std::vector<Sprite*> sprites;
+    virtual void update(){};
+};
+
+Scene* currloop;
+
+void loop(){
+    currloop->update();
+}
+
+class Main;
+class Second;
+
+Main* m;
+Second* s;
+
+class Main : public Scene{
+    int start=0;
+    int finish=0;
+    std::vector<Sprite*> walls;
+    class Player : public Sprite{
+        Main* m;
+        public:
+        Player(Main* s){
+            rect={0,0,100,100};
+            m=s;
+        }
+        void update() override{
+            const Uint8* kstate=SDL_GetKeyboardState(NULL);
+            if (kstate[SDL_SCANCODE_W]){
+                rect.y-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y+crect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_S]){
+                rect.y+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y-rect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_A]){
+                rect.x-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x+crect.w;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_D]){
+                rect.x+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x-rect.w;
+                    }
+                }
+            }
+            SDL_SetRenderDrawColor(rend,255,0,0,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+    };
+    class Wall : public Sprite{
+        public:
+        Wall(SDL_Rect r){
+            rect=r;
+        }
+        void update() override{
+            SDL_SetRenderDrawColor(rend,0,255,0,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+    };
+    public:
+    Main(){
+        player=new Player(this);
+        walls.push_back(new Wall({300,300,200,200}));
     }
-    SDL_RenderPresent(rend);
+    void update() override{
+        SDL_Event e;
+        start=SDL_GetTicks();
+        dt=(start-finish)/1000.f;
+        finish=start;
+        while (SDL_PollEvent(&e)){
+            if (e.type==SDL_QUIT)
+                emscripten_cancel_main_loop();
+            if (e.type==SDL_KEYDOWN)
+                if (e.key.keysym.sym==SDLK_e)
+                    currloop=(Scene*)s;
+        };
+
+        SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
+        SDL_RenderClear(rend);
+
+        player->update();
+        for (auto& i:walls)
+            i->update();
+        SDL_RenderPresent(rend);
+    }
+};
+
+class Second : public Scene{
+    std::vector<Sprite*> walls;
+    int start=0;
+    int finish=0;
+    class Player : public Sprite{
+        Second* m;
+        public:
+        Player(Second* s){
+            rect={0,0,100,100};
+            m=s;
+        }
+        void update() override{
+            const Uint8* kstate=SDL_GetKeyboardState(NULL);
+            if (kstate[SDL_SCANCODE_W]){
+                rect.y-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y+crect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_S]){
+                rect.y+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y-rect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_A]){
+                rect.x-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x+crect.w;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_D]){
+                rect.x+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x-rect.w;
+                    }
+                }
+            }
+            SDL_SetRenderDrawColor(rend,255,0,0,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+    };
+    class Wall : public Sprite{
+        public:
+        Wall(SDL_Rect r){
+            rect=r;
+        }
+        void update() override{
+            SDL_SetRenderDrawColor(rend,0,255,0,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+    };
+    public:
+    Second(){
+        player=new Player(this);
+        walls.push_back(new Wall({500,600,150,300}));
+    }
+    void update() override{
+        SDL_Event e;
+        start=SDL_GetTicks();
+        dt=(start-finish)/1000.f;
+        finish=start;
+        while (SDL_PollEvent(&e)){
+            if (e.type==SDL_QUIT)
+                emscripten_cancel_main_loop();
+            if (e.type==SDL_KEYDOWN)
+                if (e.key.keysym.sym==SDLK_q)
+                    currloop=(Scene*)m;
+        };
+
+        SDL_SetRenderDrawColor(rend, 0, 100, 255, 255);
+        SDL_RenderClear(rend);
+
+        player->update();
+        for (auto& i:walls)
+            i->update();
+        SDL_RenderPresent(rend);
+    }
+};
+
+extern "C" void load(){
+    std::ifstream ff("/save/s.txt");
+    if (ff.is_open()){
+        std::string g;
+        ff>>g;
+        std::cout<<g<<std::endl;
+    }
+    else 
+        std::cout<<"ERROR DURING OPENING s.txt"<<std::endl;
+    ff.close();
+}
+
+extern "C" void save(){
+    std::ofstream f("/save/s.txt");
+    if (f.is_open()){
+    f<<"hello";
+    f.close();
+    }
+    else
+        std::cout<<"ERROR DURING WRITING"<<std::endl;
 }
 
 int main(){
+    m=new Main;
+    s=new Second;
+
+    EM_ASM(
+        FS.mkdir("/save");
+        FS.mount(IDBFS,{},"/save");
+        FS.syncfs(true,function (err){
+            if (err){
+                console.log("Error at maountin or smth");
+            }
+            else{
+                _load();
+                console.log("Loaded\n");
+                _save();
+            }
+        });
+    );
+
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
     win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
     rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
     v=Vid("frames",rend);
     std::cout<<"loaded:"<<v.size();
+    currloop=m;
+    (*m).player->rect.x=200;
+    
+    
+
+    EM_ASM(
+        FS.syncfs(false,function (err) {})
+    );
+
     emscripten_set_main_loop(loop,0,1);
     return 0;
 }
