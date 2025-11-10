@@ -68,6 +68,8 @@ Vid v;
 class Sprite{
     public:
     SDL_Rect rect;
+    Sprite(SDL_Rect r) : rect(r){}
+    Sprite(){};
     virtual void update(){};
     virtual void evupdate(SDL_Event &e){};
 };
@@ -133,7 +135,7 @@ class Weapon{
         inmag=mag_size;
     };
     virtual void shoot(SDL_Rect who,int x,int y){
-        SDL_Rect shrect{who.x,who.y,10,10};
+        SDL_Rect shrect{who.x+who.w/2,who.y+who.h/2,10,10};
         if (ammos<=0 || current_cooldown>0)
         return;
         if (inmag==0){
@@ -175,7 +177,6 @@ class Main : public Scene{
         Player(Main* s){
             rect={0,0,100,100};
             wep=new Weapon;
-            wep = new Weapon();
             wep->mag_size = 10;
             wep->inmag = 10;
             wep->ammos = 50;
@@ -237,12 +238,14 @@ class Main : public Scene{
                 }
         }
     };
-    class Wall : public Sprite{
+    class Enemy:public Sprite{
+        Sprite* p;
         public:
-        Wall(SDL_Rect r){
+        Enemy(Sprite* player,SDL_Rect r) : p(player){
             rect=r;
         }
         void update() override{
+            move(&rect,p->rect.x,p->rect.y,200,dt);
             SDL_SetRenderDrawColor(rend,0,255,0,255);
             SDL_RenderFillRect(rend,&rect);
         }
@@ -250,7 +253,8 @@ class Main : public Scene{
     public:
     Main(){
         player=new Player(this);
-        walls.push_back(new Wall({300,300,200,200}));
+        walls.push_back(new Sprite{{300,300,200,200}});
+        sprites.push_back(new Enemy(player,{600,600,50,50}));
     }
     void update() override{
         SDL_Event e;
@@ -284,8 +288,11 @@ class Main : public Scene{
         SDL_RenderClear(rend);
 
         player->update();
-        for (auto& i:walls)
+        for (auto& i:sprites)
             i->update();
+        SDL_SetRenderDrawColor(rend,0,255,0,255);
+        for (auto& i:walls)
+            SDL_RenderFillRect(rend,&i->rect);
         {
             
             SDL_Texture* t=v.Get();
