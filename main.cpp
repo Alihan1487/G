@@ -1,10 +1,12 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 #include <string>
 #include <emscripten.h>
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <tuple>
 
 SDL_Renderer* rend;
 SDL_Window* win;
@@ -56,6 +58,9 @@ class Vid{
     int size(){
         return txts.size();
     }
+    int GetCursor(){
+        return curr;
+    }
 };
 
 Vid v;
@@ -64,7 +69,7 @@ class Sprite{
     public:
     SDL_Rect rect;
     virtual void update(){};
-    virtual void evupdate(){};
+    virtual void evupdate(SDL_Event &e){};
 };
 
 class Scene{
@@ -75,6 +80,79 @@ class Scene{
 };
 
 Scene* currloop;
+
+void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
+    float dx = targetX - rect->x;
+    float dy = targetY - rect->y;
+    float dist = SDL_sqrtf(dx*dx + dy*dy);
+
+    if (dist < 1.0f) return; 
+
+    dx /= dist;
+    dy /= dist;
+
+    rect->x += dx * speed * delta;
+    rect->y += dy * speed * delta;
+}
+
+class Weapon{
+    public:
+    int inmag;
+    int speed;
+    float current_cooldown;
+    int cooldown;
+    size_t mag_size;
+    int ammos;
+    inline static std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> bullets;
+    static void update_all(std::vector<Sprite*>& walls){
+        std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> real;
+    for (auto& i:bullets){
+        SDL_Rect r=std::get<0>(i);
+        std::tuple<int,int> coords=std::get<1>(i);
+        int speed=std::get<2>(i);
+        SDL_Rect coordsrect{std::get<0>(coords)-5,std::get<1>(coords)-5,15,15};
+        bool push=true;
+        for (auto j:walls)
+        if (SDL_HasIntersection(&j->rect,&r))
+        push=false;
+        if (SDL_HasIntersection(&r,&coordsrect))
+        push=false;
+        if (push)
+        real.push_back(i);
+    }
+    bullets=real;
+    for (int i=0;i<bullets.size();i++){
+        move(&std::get<0>(bullets[i]),std::get<0>(std::get<1>(bullets[i])),std::get<1>(std::get<1>(bullets[i])),std::get<2>(bullets[i]),dt);
+        SDL_SetRenderDrawColor(rend,255,0,0,255);
+        SDL_RenderFillRect(rend,&std::get<0>(bullets[i]));
+    }
+    }
+    virtual void reload(){
+        current_cooldown=2;
+        std::cout<<"COOLDOWN\n";
+        inmag=mag_size;
+    };
+    virtual void shoot(SDL_Rect who,int x,int y){
+        SDL_Rect shrect{who.x,who.y,10,10};
+        if (ammos<=0 || current_cooldown>0)
+        return;
+        if (inmag==0){
+            reload();
+        }
+        ammos-=1;
+        inmag-=1;
+        std::cout<<ammos<<std::endl;
+        auto i=std::make_tuple(shrect,std::make_tuple(x,y),speed);
+        bullets.push_back(i);
+        current_cooldown+=cooldown;
+    };
+    void update(float dt){
+        if (current_cooldown>0)
+            current_cooldown-=dt;
+        if (current_cooldown<0)
+            current_cooldown=0;
+    }
+};
 
 void loop(){
     currloop->update();
@@ -92,13 +170,25 @@ class Main : public Scene{
     std::vector<Sprite*> walls;
     class Player : public Sprite{
         Main* m;
+        Weapon* wep;
         public:
         Player(Main* s){
             rect={0,0,100,100};
+            wep=new Weapon;
+            wep = new Weapon();
+            wep->mag_size = 10;
+            wep->inmag = 10;
+            wep->ammos = 50;
+            wep->speed = 1500;
+            wep->cooldown = 2; // сек
+            wep->current_cooldown = 0;
             m=s;
         }
         void update() override{
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
+            int x,y;
+            Uint32 mstate=SDL_GetMouseState(&x,&y);
+            wep->update(dt);
             if (kstate[SDL_SCANCODE_W]){
                 rect.y-=400*dt;
                 for (auto& i: m->walls){
@@ -135,8 +225,16 @@ class Main : public Scene{
                     }
                 }
             }
+            if (mstate & SDL_BUTTON_LMASK)
+                wep->shoot(rect,x,y);
             SDL_SetRenderDrawColor(rend,255,0,0,255);
             SDL_RenderFillRect(rend,&rect);
+        }
+        void evupdate(SDL_Event &e) override{
+            if (e.type==SDL_KEYDOWN)
+                if(e.key.keysym.sym==SDLK_r){
+                    wep->reload();
+                }
         }
     };
     class Wall : public Sprite{
@@ -160,6 +258,7 @@ class Main : public Scene{
         dt=(start-finish)/1000.f;
         finish=start;
         while (SDL_PollEvent(&e)){
+            player->evupdate(e);
             if (e.type==SDL_QUIT)
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
@@ -178,6 +277,7 @@ class Main : public Scene{
                         }
                     }));
                 }
+            
         };
 
         SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
@@ -186,6 +286,14 @@ class Main : public Scene{
         player->update();
         for (auto& i:walls)
             i->update();
+        {
+            
+            SDL_Texture* t=v.Get();
+            if (!t)
+            v.setCursor(1);
+            SDL_RenderCopy(rend,t,nullptr,&player->rect);
+        }
+        Weapon::update_all(walls);
         SDL_RenderPresent(rend);
     }
 };
@@ -313,7 +421,7 @@ int main(){
         FS.mount(IDBFS,{},"/save");
         FS.syncfs(true,function (err){
             if (err){
-                console.log("Error at maountin or smth");
+                console.log("Error at mountin or smth");
             }
             else{
                 _load();
@@ -326,7 +434,8 @@ int main(){
     IMG_Init(IMG_INIT_PNG);
     win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
     rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
-    v=Vid("frames",rend);
+
+    v=Vid("/assets/frames",rend);
     currloop=m;
     (*m).player->rect.x=200;
 
