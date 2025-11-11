@@ -76,6 +76,9 @@ class Sprite{
 
 class Scene{
     public:
+    inline static int start=0;
+    inline static int finish=0;
+    bool active=false;
     Sprite* player;
     std::vector<Sprite*> sprites;
     virtual void update(){};
@@ -167,8 +170,6 @@ Main* m;
 Second* s;
 
 class Main : public Scene{
-    int start=0;
-    int finish=0;
     std::vector<Sprite*> walls;
     class Player : public Sprite{
         Main* m;
@@ -181,11 +182,12 @@ class Main : public Scene{
             wep->inmag = 10;
             wep->ammos = 50;
             wep->speed = 1500;
-            wep->cooldown = 2; // сек
+            wep->cooldown = 2;
             wep->current_cooldown = 0;
             m=s;
         }
         void update() override{
+            
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
@@ -240,9 +242,26 @@ class Main : public Scene{
     };
     class Enemy:public Sprite{
         Sprite* p;
+        struct EnemySave{
+            Sprite* p;
+            SDL_Rect r;
+            EnemySave(Sprite* plr,SDL_Rect re) : p{plr},r{re}{}
+            EnemySave(){}
+            void LoadToEnemy(Enemy* e){
+                e->rect.x=r.x;
+                e->rect.y=r.y;
+                e->p=p;
+            }
+            void LoadFromEnemy(Enemy* e){
+                r=e->rect;
+                p=e->p;
+            }
+        };
+        EnemySave backup;
         public:
         Enemy(Sprite* player,SDL_Rect r) : p(player){
             rect=r;
+            backup.LoadFromEnemy(this);
         }
         void update() override{
             move(&rect,p->rect.x,p->rect.y,200,dt);
@@ -266,8 +285,9 @@ class Main : public Scene{
             if (e.type==SDL_QUIT)
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
-                if (e.key.keysym.sym==SDLK_e)
+                if (e.key.keysym.sym==SDLK_e){
                     currloop=(Scene*)s;
+                }
         if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_l){
                     EM_ASM(
@@ -302,13 +322,12 @@ class Main : public Scene{
         }
         Weapon::update_all(walls);
         SDL_RenderPresent(rend);
+        
     }
 };
 
 class Second : public Scene{
     std::vector<Sprite*> walls;
-    int start=0;
-    int finish=0;
     class Player : public Sprite{
         Second* m;
         public:
@@ -317,6 +336,7 @@ class Second : public Scene{
             m=s;
         }
         void update() override{
+
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             if (kstate[SDL_SCANCODE_W]){
                 rect.y-=400*dt;
@@ -364,6 +384,7 @@ class Second : public Scene{
             rect=r;
         }
         void update() override{
+            
             SDL_SetRenderDrawColor(rend,0,255,0,255);
             SDL_RenderFillRect(rend,&rect);
         }
@@ -371,6 +392,9 @@ class Second : public Scene{
     public:
     Second(){
         player=new Player(this);
+        player->rect.x = 200; 
+        player->rect.y = 200;
+
         walls.push_back(new Wall({500,600,150,300}));
     }
     void update() override{
@@ -382,8 +406,9 @@ class Second : public Scene{
             if (e.type==SDL_QUIT)
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
-                if (e.key.keysym.sym==SDLK_q)
+                if (e.key.keysym.sym==SDLK_q){
                     currloop=(Scene*)m;
+                }
         };
 
         SDL_SetRenderDrawColor(rend, 0, 100, 255, 255);
