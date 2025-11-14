@@ -1,15 +1,18 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
+#include <SDL2/SDL_ttf.h>
 #include <string>
 #include <emscripten.h>
 #include <vector>
 #include <iostream>
 #include <fstream>
 #include <tuple>
+#include <typeinfo>
 
 SDL_Renderer* rend;
 SDL_Window* win;
+TTF_Font* arial;
 float dt=0;
 
 class Vid{
@@ -67,6 +70,7 @@ Vid v;
 
 class Sprite{
     public:
+    bool alive=true;
     SDL_Rect rect;
     Sprite(SDL_Rect r) : rect(r){}
     Sprite(){};
@@ -82,6 +86,8 @@ class Scene{
     Sprite* player;
     std::vector<Sprite*> sprites;
     virtual void update(){};
+    virtual void On(){};
+    virtual void Off(){};
 };
 
 Scene* currloop;
@@ -105,7 +111,7 @@ class Weapon{
     int inmag;
     int speed;
     float current_cooldown;
-    int cooldown;
+    float cooldown;
     size_t mag_size;
     int ammos;
     inline static std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> bullets;
@@ -165,33 +171,49 @@ void loop(){
 
 class Main;
 class Second;
+class GameOver;
+class ShopS;
 
 Main* m;
 Second* s;
+GameOver* gs;
 
 class Main : public Scene{
     std::vector<Sprite*> walls;
+    class Shop:public Sprite{
+        public:
+        Shop(SDL_Rect r){
+            rect=r;
+        }
+        void update() override{
+            SDL_SetRenderDrawColor(rend,255,0,255,255);
+            SDL_RenderFillRect(rend,&rect);
+        };
+    };
     class Player : public Sprite{
         Main* m;
-        Weapon* wep;
+        std::vector<Weapon*> weapons;
+        int currwep=0;
         public:
         Player(Main* s){
             rect={0,0,100,100};
-            wep=new Weapon;
+            Weapon* wep=new Weapon;
+            weapons.push_back(wep);
             wep->mag_size = 10;
             wep->inmag = 10;
             wep->ammos = 50;
             wep->speed = 1500;
-            wep->cooldown = 2;
+            wep->cooldown = 0.5;
             wep->current_cooldown = 0;
             m=s;
         }
         void update() override{
-            
+            if (!alive)
+                currloop=(Scene*)gs;
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
-            wep->update(dt);
+            weapons[currwep]->update(dt);
             if (kstate[SDL_SCANCODE_W]){
                 rect.y-=400*dt;
                 for (auto& i: m->walls){
@@ -229,42 +251,45 @@ class Main : public Scene{
                 }
             }
             if (mstate & SDL_BUTTON_LMASK)
-                wep->shoot(rect,x,y);
+                weapons[currwep]->shoot(rect,x,y);
             SDL_SetRenderDrawColor(rend,255,0,0,255);
             SDL_RenderFillRect(rend,&rect);
+            for (auto i:m->sprites){
+                if (dynamic_cast<Shop*>(i)){
+                    if (SDL_HasIntersection(&rect,&i->rect))
+                        std::cout<<"SHOP"<<std::endl;
+                }
+            }
         }
         void evupdate(SDL_Event &e) override{
             if (e.type==SDL_KEYDOWN)
                 if(e.key.keysym.sym==SDLK_r){
-                    wep->reload();
+                    weapons[currwep]->reload();
                 }
         }
     };
     class Enemy:public Sprite{
         Sprite* p;
-        struct EnemySave{
-            Sprite* p;
-            SDL_Rect r;
-            EnemySave(Sprite* plr,SDL_Rect re) : p{plr},r{re}{}
-            EnemySave(){}
-            void LoadToEnemy(Enemy* e){
-                e->rect.x=r.x;
-                e->rect.y=r.y;
-                e->p=p;
-            }
-            void LoadFromEnemy(Enemy* e){
-                r=e->rect;
-                p=e->p;
-            }
-        };
-        EnemySave backup;
         public:
         Enemy(Sprite* player,SDL_Rect r) : p(player){
             rect=r;
-            backup.LoadFromEnemy(this);
+            alive=true;
         }
         void update() override{
+            if (!alive)
+                return;
+            std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> real;
+            for (auto& i:Weapon::bullets){
+                if (SDL_HasIntersection(&std::get<0>(i),&rect)){
+                    alive=false;
+                    continue;
+                }
+                real.push_back(i);
+            }
+            Weapon::bullets=real;
             move(&rect,p->rect.x,p->rect.y,200,dt);
+            if (SDL_HasIntersection(&rect,&p->rect))
+                p->alive=false;
             SDL_SetRenderDrawColor(rend,0,255,0,255);
             SDL_RenderFillRect(rend,&rect);
         }
@@ -274,12 +299,18 @@ class Main : public Scene{
         player=new Player(this);
         walls.push_back(new Sprite{{300,300,200,200}});
         sprites.push_back(new Enemy(player,{600,600,50,50}));
+        sprites.push_back(new Shop{{800,200,100,100}});
     }
     void update() override{
+        static int lastspawn=0;
         SDL_Event e;
         start=SDL_GetTicks();
         dt=(start-finish)/1000.f;
         finish=start;
+        if (start-lastspawn>2000){
+            sprites.push_back(new Enemy(player,{600,600,50,50}));
+            lastspawn=start;
+        }
         while (SDL_PollEvent(&e)){
             player->evupdate(e);
             if (e.type==SDL_QUIT)
@@ -314,7 +345,6 @@ class Main : public Scene{
         for (auto& i:walls)
             SDL_RenderFillRect(rend,&i->rect);
         {
-            
             SDL_Texture* t=v.Get();
             if (!t)
             v.setCursor(1);
@@ -322,9 +352,17 @@ class Main : public Scene{
         }
         Weapon::update_all(walls);
         SDL_RenderPresent(rend);
-        
+        std::vector<Sprite*> real;
+        for (auto& i:sprites){
+            if (!i->alive)
+                continue;
+            real.push_back(i);
+        }
+        sprites=real;
     }
 };
+
+
 
 class Second : public Scene{
     std::vector<Sprite*> walls;
@@ -421,6 +459,35 @@ class Second : public Scene{
     }
 };
 
+class GameOver:public Scene{
+    SDL_Texture* rendtxt;
+    public:
+    GameOver(){
+        SDL_Surface* surf=TTF_RenderText_Solid(arial,"Game Over",SDL_Color{255,255,255,255});
+        rendtxt=SDL_CreateTextureFromSurface(rend,surf);
+        SDL_FreeSurface(surf);
+    }
+    void update() override{
+        SDL_Event e;
+        while (SDL_PollEvent(&e)){
+            if (e.type==SDL_QUIT)
+                emscripten_cancel_main_loop();  
+            if (e.type==SDL_KEYDOWN){
+                m=new Main;
+                currloop=(Scene*)m;
+            }
+        }
+        SDL_SetRenderDrawColor(rend,0,0,0,255);
+        SDL_RenderClear(rend);
+        {
+            SDL_Rect r{100,200,800,200};
+            SDL_RenderCopy(rend,rendtxt,nullptr,&r);
+        }
+        SDL_RenderPresent(rend);
+    }
+};
+
+
 extern "C" void load(){
     std::ofstream f("save/soo.txt", std::ios::app);
     std::ifstream ff("/save/soo.txt");
@@ -445,8 +512,6 @@ extern "C" void save(){
 }
 
 int main(){
-    m=new Main;
-    s=new Second;
 
     EM_ASM(
         FS.mkdir("/save");
@@ -464,8 +529,20 @@ int main(){
 
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
+    TTF_Init();
+
+    arial=TTF_OpenFont("assets/arialmt.ttf",100);
+    if (!arial){
+        std::cerr<<"FAILKED TO LOAD FONT ARIAL:"<<TTF_GetError()<<std::endl;
+        return 1;
+    }
+
     win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
     rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
+
+    m=new Main;
+    s=new Second;
+    gs=new GameOver;
 
     v=Vid("/assets/frames",rend);
     currloop=m;
