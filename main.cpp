@@ -124,6 +124,7 @@ class Weapon{
     float cooldown;
     size_t mag_size;
     int ammos;
+    float reltime;
     inline static std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> bullets;
     static void update_all(std::vector<Sprite*>& walls){
         std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> real;
@@ -149,7 +150,7 @@ class Weapon{
     }
     }
     virtual void reload(){
-        current_cooldown=2;
+        current_cooldown=reltime;
         std::cout<<"COOLDOWN\n";
         inmag=mag_size;
     };
@@ -209,6 +210,7 @@ class ShopS:public Scene{
                     n->speed = 1500;
                     n->cooldown = 0.1f;
                     n->current_cooldown = 0;
+                    n->reltime=2.f;
                     for (auto i:*weps)
                         if (i==n)
                             has=true;
@@ -234,7 +236,10 @@ class ShopS:public Scene{
 
 class Main : public Scene{
     public:
+
     std::vector<Sprite*> walls;
+
+
     class Shop:public Sprite{
         public:
         Shop(SDL_Rect r){
@@ -245,6 +250,8 @@ class Main : public Scene{
             SDL_RenderFillRect(rend,&rect);
         };
     };
+
+
     void On() override{
         if (dynamic_cast<ShopS*>(Scene::lscene)){
             std::cout<<"LEFT SHOP"<<std::endl;
@@ -252,6 +259,8 @@ class Main : public Scene{
             player->rect.y=0;
         }
     }
+
+
     class Player : public Sprite{
         public:
         Main* m;
@@ -267,6 +276,7 @@ class Main : public Scene{
             wep->speed = 1500;
             wep->cooldown = 0.5;
             wep->current_cooldown = 0;
+            wep->reltime=2.f;
             m=s;
         }
         void update() override{
@@ -336,6 +346,8 @@ class Main : public Scene{
             
         }
     };
+
+
     class Enemy:public Sprite{
         Sprite* p;
         public:
@@ -362,12 +374,15 @@ class Main : public Scene{
             SDL_RenderFillRect(rend,&rect);
         }
     };
+
+
     Main(){
         player=new Player(this);
         walls.push_back(new Sprite{{300,300,200,200}});
         sprites.push_back(new Enemy(player,{600,600,50,50}));
         sprites.push_back(new Shop{{800,200,100,100}});
     }
+
     void update() override{
         static int lastspawn=0;
         SDL_Event e;
@@ -430,7 +445,11 @@ class Main : public Scene{
 };
 
 class Second : public Scene{
+
+
     std::vector<Sprite*> walls;
+
+
     class Player : public Sprite{
         Second* m;
         public:
@@ -481,25 +500,16 @@ class Second : public Scene{
             SDL_RenderFillRect(rend,&rect);
         }
     };
-    class Wall : public Sprite{
-        public:
-        Wall(SDL_Rect r){
-            rect=r;
-        }
-        void update() override{
-            
-            SDL_SetRenderDrawColor(rend,0,255,0,255);
-            SDL_RenderFillRect(rend,&rect);
-        }
-    };
+
+
     public:
     Second(){
         player=new Player(this);
         player->rect.x = 200; 
         player->rect.y = 200;
-
-        walls.push_back(new Wall({500,600,150,300}));
+        walls.push_back(new Sprite{{500,600,150,300}});
     }
+
     void update() override{
         SDL_Event e;
         start=SDL_GetTicks();
@@ -527,11 +537,13 @@ class Second : public Scene{
 class GameOver:public Scene{
     SDL_Texture* rendtxt;
     public:
+
     GameOver(){
         SDL_Surface* surf=TTF_RenderText_Solid(arial,"Game Over",SDL_Color{255,255,255,255});
         rendtxt=SDL_CreateTextureFromSurface(rend,surf);
         SDL_FreeSurface(surf);
     }
+    
     void update() override{
         SDL_Event e;
         while (SDL_PollEvent(&e)){
