@@ -80,7 +80,7 @@ class Sprite{
 
 class Scene{
     public:
-    inline static Scene* lscene;
+    inline static Scene* lscene=nullptr;
     inline static std::vector<Scene*> scenes;
     inline static int start=0;
     inline static int finish=0;
@@ -96,11 +96,10 @@ class Scene{
 Scene* currloop;
 
 void switch_to(void* s){
-    Scene* save=currloop;
     currloop->Off();
+    Scene::lscene=currloop;
     currloop=(Scene*)s;
     currloop->On();
-    Scene::lscene=save;
 }
 
 void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
@@ -160,6 +159,7 @@ class Weapon{
         return;
         if (inmag==0){
             reload();
+            return;
         }
         ammos-=1;
         inmag-=1;
@@ -190,6 +190,48 @@ Second* s;
 GameOver* gs;
 ShopS* ss;
 
+class ShopS:public Scene{
+    public:
+    std::vector<Weapon*> *weps;
+    ShopS(std::vector<Weapon*> *w) : weps(w){}
+    void update() override{
+        SDL_Event e;
+        while (SDL_PollEvent(&e)){
+            if (e.type==SDL_QUIT)
+                emscripten_cancel_main_loop();
+            if (e.type==SDL_KEYDOWN){
+                if (e.key.keysym.sym==SDLK_e){
+                    bool has=false;
+                    Weapon* n=new Weapon;
+                    n->mag_size = 10;
+                    n->inmag = 30;
+                    n->ammos = 999;
+                    n->speed = 1500;
+                    n->cooldown = 0.1f;
+                    n->current_cooldown = 0;
+                    for (auto i:*weps)
+                        if (i==n)
+                            has=true;
+                    if (!has){
+                        weps->push_back(n);
+                        std::cout<<"PURCHASED"<<std::endl;
+                    }
+                }   
+            }
+            if (e.type==SDL_KEYDOWN){
+                if (e.key.keysym.sym==SDLK_ESCAPE){
+                    std::cout<<"ESCAPE"<<std::endl;
+                    switch_to(lscene);
+                }
+            }
+        }
+        SDL_SetRenderDrawColor(rend,0,100,0,255);
+        SDL_RenderClear(rend);
+
+        SDL_RenderPresent(rend);
+    }
+};
+
 class Main : public Scene{
     public:
     std::vector<Sprite*> walls;
@@ -204,7 +246,7 @@ class Main : public Scene{
         };
     };
     void On() override{
-        if (typeid(lscene)==typeid(Shop*)){
+        if (dynamic_cast<ShopS*>(Scene::lscene)){
             std::cout<<"LEFT SHOP"<<std::endl;
             player->rect.x=0;
             player->rect.y=0;
@@ -289,7 +331,7 @@ class Main : public Scene{
                 }
             if (e.type==SDL_KEYDOWN)
                 if(e.key.keysym.sym==SDLK_f){
-                    currwep=(1 ? currwep!=1 : 0);
+                    currwep = (currwep + 1) % weapons.size();
                 }
             
         }
@@ -384,48 +426,6 @@ class Main : public Scene{
             real.push_back(i);
         }
         sprites=real;
-    }
-};
-
-class ShopS:public Scene{
-    public:
-    std::vector<Weapon*> *weps;
-    ShopS(std::vector<Weapon*> *w) : weps(w){}
-    void update() override{
-        SDL_Event e;
-        while (SDL_PollEvent(&e)){
-            if (e.type==SDL_QUIT)
-                emscripten_cancel_main_loop();
-            if (e.type==SDL_KEYDOWN){
-                if (e.key.keysym.sym==SDLK_e){
-                    bool has=false;
-                    Weapon* n=new Weapon;
-                    n->mag_size = 10;
-                    n->inmag = 10;
-                    n->ammos = 999;
-                    n->speed = 1500;
-                    n->cooldown = 0;
-                    n->current_cooldown = 0;
-                    for (auto i:*weps)
-                        if (i==n)
-                            has=true;
-                    if (!has){
-                        weps->push_back(n);
-                        std::cout<<"PURCHASED"<<std::endl;
-                    }
-                }   
-            }
-            if (e.type==SDL_KEYDOWN){
-                if (e.key.keysym.sym==SDLK_ESCAPE){
-                    std::cout<<"ESCAPE"<<std::endl;
-                    switch_to(lscene);
-                }
-            }
-        }
-        SDL_SetRenderDrawColor(rend,0,100,0,255);
-        SDL_RenderClear(rend);
-
-        SDL_RenderPresent(rend);
     }
 };
 
@@ -537,9 +537,10 @@ class GameOver:public Scene{
         while (SDL_PollEvent(&e)){
             if (e.type==SDL_QUIT)
                 emscripten_cancel_main_loop();  
-            if (e.type==SDL_KEYDOWN){
-                m=new Main;
-                currloop=(Scene*)m;
+            if (e.type == SDL_KEYDOWN){
+                delete m;
+                m = new Main;
+                switch_to(m);
             }
         }
         SDL_SetRenderDrawColor(rend,0,0,0,255);
