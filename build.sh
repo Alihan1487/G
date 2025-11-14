@@ -9,6 +9,5 @@ em++ main.cpp \
 -s ALLOW_MEMORY_GROWTH=1 \
 -s EXPORTED_FUNCTIONS='["_main","_load","_save"]' \
 -lidbfs.js \
--o index.html
-
+-o index.html &&
 emrun index.html --no-browser
