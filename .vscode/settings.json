@@ -74,6 +74,15 @@
         "locale": "cpp",
         "print": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "codecvt": "cpp",
+        "complex": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "expected": "cpp",
+        "future": "cpp",
+        "ranges": "cpp",
+        "cfenv": "cpp",
+        "__tree": "cpp"
     }
 }

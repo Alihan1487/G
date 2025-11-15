@@ -184,8 +184,22 @@ void loop(){
 
 struct PlayerSave{
     SDL_Rect rect;
-    std::vector<Weapon*> *weapons;
+    std::vector<Weapon*> weapons;
+    void load_to(PlayerSave& obj){
+        obj.rect=rect;
+        obj.weapons.clear();
+        for (int i=0;i<weapons.size();i++)
+            obj.weapons.push_back(new Weapon(*weapons[i]));
+    }
+    void load_from(PlayerSave& obj){
+        rect=obj.rect;
+        weapons.clear();
+        for (int i=0;i<obj.weapons.size();i++)
+            weapons.push_back(new Weapon(*(obj.weapons[i])));
+    }
 };
+
+PlayerSave sv;
 
 class Main;
 class Second;
@@ -256,15 +270,6 @@ class Main : public Scene{
             SDL_RenderFillRect(rend,&rect);
         };
     };
-
-
-    void On(std::initializer_list<void*> args) override{
-        if (dynamic_cast<ShopS*>(Scene::lscene)){
-            std::cout<<"LEFT SHOP"<<std::endl;
-            player->rect.x=0;
-            player->rect.y=0;
-        }
-    }
 
 
     class Player : public Sprite{
@@ -353,6 +358,31 @@ class Main : public Scene{
         }
     };
 
+    Player* plr;
+
+    void On(std::initializer_list<void*> args) override{
+        PlayerSave s;
+        s.load_from(sv);
+        plr->rect=s.rect;
+        plr->weapons.clear();
+        for (int i=0;i<s.weapons.size();i++)
+            plr->weapons.push_back(new Weapon(*(s.weapons[i])));
+        if (dynamic_cast<ShopS*>(Scene::lscene)){
+            std::cout<<"LEFT SHOP"<<std::endl;
+            player->rect.x=0;
+            player->rect.y=0;
+        }
+    }
+
+    void Off() override{
+        PlayerSave s;
+        s.rect=plr->rect;
+        s.weapons.clear();
+        for (int i=0;i<plr->weapons.size();i++)
+            s.weapons.push_back(new Weapon(*(plr->weapons[i])));
+        s.load_to(sv);
+    }
+
 
     class Enemy:public Sprite{
         Sprite* p;
@@ -383,7 +413,8 @@ class Main : public Scene{
 
 
     Main(){
-        player=new Player(this);
+        plr=new Player(this);
+        player=plr;
         walls.push_back(new Sprite{{300,300,200,200}});
         sprites.push_back(new Enemy(player,{600,600,50,50}));
         sprites.push_back(new Shop{{800,200,100,100}});
@@ -502,6 +533,9 @@ class Second : public Scene{
                     }
                 }
             }
+
+            
+
             SDL_SetRenderDrawColor(rend,255,0,0,255);
             SDL_RenderFillRect(rend,&rect);
         }
@@ -534,8 +568,10 @@ class Second : public Scene{
         SDL_RenderClear(rend);
 
         player->update();
-        for (auto& i:walls)
-            i->update();
+        for (auto& i:walls){
+            SDL_SetRenderDrawColor(rend,0,255,0,255);
+            SDL_RenderFillRect(rend,&i->rect);
+        }
         SDL_RenderPresent(rend);
     }
 };
