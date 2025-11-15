@@ -9,6 +9,7 @@
 #include <fstream>
 #include <tuple>
 #include <typeinfo>
+#include <initializer_list>
 
 SDL_Renderer* rend;
 SDL_Window* win;
@@ -88,18 +89,18 @@ class Scene{
     Sprite* player;
     std::vector<Sprite*> sprites;
     virtual void update(){};
-    virtual void On(){};
+    virtual void On(std::initializer_list<void*> args){};
     virtual void Off(){};
     virtual void reset(){};
 };
 
 Scene* currloop;
 
-void switch_to(void* s){
+void switch_to(void* s,std::initializer_list<void*> args){
     currloop->Off();
     Scene::lscene=currloop;
     currloop=(Scene*)s;
-    currloop->On();
+    currloop->On(args);
 }
 
 void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
@@ -181,6 +182,11 @@ void loop(){
     currloop->update();
 }
 
+struct PlayerSave{
+    SDL_Rect rect;
+    std::vector<Weapon*> *weapons;
+};
+
 class Main;
 class Second;
 class GameOver;
@@ -223,7 +229,7 @@ class ShopS:public Scene{
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_ESCAPE){
                     std::cout<<"ESCAPE"<<std::endl;
-                    switch_to(lscene);
+                    switch_to(lscene,{});
                 }
             }
         }
@@ -252,7 +258,7 @@ class Main : public Scene{
     };
 
 
-    void On() override{
+    void On(std::initializer_list<void*> args) override{
         if (dynamic_cast<ShopS*>(Scene::lscene)){
             std::cout<<"LEFT SHOP"<<std::endl;
             player->rect.x=0;
@@ -281,7 +287,7 @@ class Main : public Scene{
         }
         void update() override{
             if (!alive)
-                switch_to(gs);
+                switch_to(gs,{});
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
@@ -329,7 +335,7 @@ class Main : public Scene{
             for (auto i:m->sprites){
                 if (dynamic_cast<Shop*>(i)){
                     if (SDL_HasIntersection(&rect,&i->rect)){
-                        switch_to(ss);
+                        switch_to(ss,{});
                     }
                 }
             }
@@ -399,7 +405,7 @@ class Main : public Scene{
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_e){
-                    switch_to(s);
+                    switch_to(s,{});
                 }
         if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_l){
@@ -520,7 +526,7 @@ class Second : public Scene{
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_q){
-                    switch_to(m);
+                    switch_to(m,{});
                 }
         };
 
@@ -552,7 +558,7 @@ class GameOver:public Scene{
             if (e.type == SDL_KEYDOWN){
                 delete m;
                 m = new Main;
-                switch_to(m);
+                switch_to(m,{});
             }
         }
         SDL_SetRenderDrawColor(rend,0,0,0,255);
