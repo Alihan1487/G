@@ -83,6 +83,11 @@
         "future": "cpp",
         "ranges": "cpp",
         "cfenv": "cpp",
-        "__tree": "cpp"
+        "__tree": "cpp",
+        "regex": "cpp",
+        "valarray": "cpp",
+        "*.def": "cpp",
+        "*.inc": "cpp",
+        "set": "cpp"
     }
 }

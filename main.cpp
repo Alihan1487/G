@@ -41,6 +41,12 @@ class Vid{
         }
     }
     Vid(){};
+    ~Vid(){
+        std::cout<<"DESTROYED VID OBJECT"<<std::endl;
+        for (auto i:txts)
+            SDL_DestroyTexture(i);
+    }
+
     SDL_Texture* Get(){
         if (curr>=txts.size())
             return nullptr;
@@ -69,6 +75,7 @@ class Vid{
 
 Vid v;
 
+
 class Sprite{
     public:
     bool alive=true;
@@ -77,6 +84,7 @@ class Sprite{
     Sprite(){};
     virtual void update(){};
     virtual void evupdate(SDL_Event &e){};
+    virtual ~Sprite()=default;
 };
 
 class Scene{
@@ -92,6 +100,7 @@ class Scene{
     virtual void On(std::initializer_list<void*> args){};
     virtual void Off(){};
     virtual void reset(){};
+    virtual ~Scene()=default;
 };
 
 Scene* currloop;
@@ -182,11 +191,8 @@ class Weapon{
         }
         ammos-=1;
         inmag-=1;
-        std::cout<<ammos<<std::endl;
+
         auto i=new Bullet{w,shrect,speed,std::make_tuple(x,y),damage};
-
-
-
         (*scene)->sprites.push_back(i);
 
 
@@ -243,13 +249,9 @@ ShopS* ss;
 
 class ShopS:public Scene{
     public:
-    ShopS(std::vector<Weapon*> *w){}
-
     ShopS(){}
 
-    static void operator delete(void* obj) noexcept{
-        
-    }
+    
 
     void update() override{
         SDL_Event e;
@@ -302,11 +304,6 @@ class Main : public Scene{
     public:
 
     std::vector<Sprite*> walls;
-
-
-    static void operator delete(void* obj) noexcept{
-
-    }
 
 
     class Shop:public Sprite{
@@ -405,9 +402,8 @@ class Main : public Scene{
             SDL_RenderFillRect(rend,&rect);
             for (auto i:m->sprites){
                 if (dynamic_cast<Shop*>(i)){
-                    if (SDL_HasIntersection(&rect,&i->rect)){
+                    if (SDL_HasIntersection(&rect,&i->rect))
                         switch_to(ss,{});
-                    }
                 }
             }
         }
@@ -421,6 +417,10 @@ class Main : public Scene{
                     currwep = (currwep + 1) % weapons.size();
                 }
             
+        }
+        ~Player(){
+            for (auto i:weapons)
+                delete i;
         }
     };
 
@@ -534,10 +534,13 @@ class Main : public Scene{
             SDL_RenderFillRect(rend,&i->rect);
         {
             SDL_Texture* t=v.Get();
-            if (!t)
-            v.setCursor(1);
-            if (!(plr->damage_cd>0))
+            if (!t){
+                v.setCursor(1);
+                std::cout<<"ERROR:"<<IMG_GetError()<<std::endl;
+            }
+            if (!(plr->damage_cd>0)){
                 SDL_RenderCopy(rend,t,nullptr,&player->rect);
+            }
         }
         std::vector<Sprite*> real;
         for (auto& i:sprites){
@@ -550,6 +553,12 @@ class Main : public Scene{
 
         SDL_RenderPresent(rend);
 
+    }
+    ~Main(){
+        for (auto i:walls)
+            delete i;
+        for (auto i:sprites)
+            delete i;
     }
 };
 
@@ -659,6 +668,12 @@ class Second : public Scene{
         sprites=real;
         SDL_RenderPresent(rend);
     }
+    ~Second(){
+        for (auto i:walls)
+            delete i;
+        for (auto i:sprites)
+            delete i;
+    }
 };
 
 class GameOver:public Scene{
@@ -697,6 +712,9 @@ class GameOver:public Scene{
             SDL_RenderCopy(rend,rendtxt,nullptr,&r);
         }
         SDL_RenderPresent(rend);
+    }
+    ~GameOver(){
+        SDL_DestroyTexture(rendtxt);
     }
 };
 
@@ -758,9 +776,11 @@ int main(){
     gs=new GameOver;
     {
         Main::Player* o=(Main::Player*)m->player;
-        ss=new ShopS(&o->weapons);
+        ss=new ShopS;
     }
-    v=Vid("/assets/frames",rend);
+    Vid&& l=Vid("/assets/frames",rend);
+    v=l;
+    std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
     currloop=m;
     (*m).player->rect.x=200;
 
