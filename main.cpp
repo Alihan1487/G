@@ -156,7 +156,7 @@ class Weapon{
     int damage;
     Weapon(Scene** h){
         scene=h;
-        damage=10;
+        damage=1;
     }
     virtual void reload(){
         current_cooldown=reltime;
@@ -313,8 +313,8 @@ class Main : public Scene{
 
     class Player : public Sprite{
         public:
-        float damage_cd=0;
-        int hp=100;
+        float damage_cd=0.f;
+        int hp=5;
         Main* m;
         std::vector<Weapon*> weapons;
         int currwep=0;
@@ -336,11 +336,12 @@ class Main : public Scene{
                 alive=false;
             if (!alive)
                 switch_to(gs,{});
-            damage_cd-=dt;
+            if (damage_cd>0)
+                damage_cd-=dt;
+            if (damage_cd<0)
+                damage_cd=0;
             if (hp<0)
                 hp=0;
-            if (damage_cd>0)
-                int pass;
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
@@ -423,11 +424,6 @@ class Main : public Scene{
         plr->hp=sv.hp;
         for (int i=0;i<s.weapons.size();i++)
             plr->weapons.push_back(new Weapon(*(s.weapons[i])));
-        if (dynamic_cast<ShopS*>(Scene::lscene)){
-            std::cout<<"LEFT SHOP"<<std::endl;
-            player->rect.x=0;
-            player->rect.y=0;
-        }
     }
 
     void Off() override{
@@ -446,7 +442,7 @@ class Main : public Scene{
         int damage;
         Main* m;
         public:
-        Enemy(Main* mm,Sprite* player,SDL_Rect r,int d=10) : p(player){
+        Enemy(Main* mm,Sprite* player,SDL_Rect r,int d=1) : p(player){
             rect=r;
             alive=true;
             damage=d;
@@ -465,7 +461,8 @@ class Main : public Scene{
             }
             move(&rect,p->rect.x,p->rect.y,200,dt);
             if (SDL_HasIntersection(&rect,&p->rect)){
-                if (m->plr->damage_cd<=0){
+                if (!(m->plr->damage_cd>0)){
+                    std::cout<<"ATTACKED"<<std::endl;
                     m->plr->hp-=damage;
                     m->plr->damage_cd=2.f;
                 }
@@ -529,7 +526,8 @@ class Main : public Scene{
             SDL_Texture* t=v.Get();
             if (!t)
             v.setCursor(1);
-            SDL_RenderCopy(rend,t,nullptr,&player->rect);
+            if (!(plr->damage_cd>0))
+                SDL_RenderCopy(rend,t,nullptr,&player->rect);
         }
         std::vector<Sprite*> real;
         for (auto& i:sprites){
@@ -675,6 +673,10 @@ class GameOver:public Scene{
             if (e.type == SDL_KEYDOWN){
                 delete m;
                 m = new Main;
+                m->sprites.clear();
+                sv.rect.x=0;
+                sv.rect.y=0;
+                sv.hp=5;
                 switch_to(m,{});
             }
         }
