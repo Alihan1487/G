@@ -108,7 +108,7 @@ void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
     float dy = targetY - rect->y;
     float dist = SDL_sqrtf(dx*dx + dy*dy);
 
-    if (dist < 1.0f) return; 
+    if (dist < 3.0f) return; 
 
     dx /= dist;
     dy /= dist;
@@ -117,8 +117,35 @@ void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
     rect->y += dy * speed * delta;
 }
 
+class Bullet: public Sprite{
+    public:
+    int speed;
+    std::tuple<int,int> coords;
+    int damage;
+    std::vector<Sprite*> *walls;
+    Bullet( std::vector<Sprite*> *w,SDL_Rect r,int s,std::tuple<int,int> c,int d) : speed{s},coords{c},damage{d}{rect=r;walls=w;alive=true;}
+    void update() override{
+        if (!alive){
+            return;
+        }
+        float dx=rect.x-std::get<0>(coords);
+        float dy=rect.y-std::get<1>(coords);
+        if (sqrt(dx*dx+dy*dy)<5.f){
+            alive=false;
+        }
+        for (auto& i:*walls){
+            if (SDL_HasIntersection(&rect,&i->rect))
+                alive=false;
+        }
+        move(&rect,std::get<0>(coords),std::get<1>(coords),speed,dt);
+        SDL_SetRenderDrawColor(rend,255,0,0,255);
+        SDL_RenderFillRect(rend,&rect);
+    }
+};
+
 class Weapon{
     public:
+    Scene** scene;
     int inmag;
     int speed;
     float current_cooldown;
@@ -126,36 +153,17 @@ class Weapon{
     size_t mag_size;
     int ammos;
     float reltime;
-    inline static std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> bullets;
-    static void update_all(std::vector<Sprite*>& walls){
-        std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> real;
-    for (auto& i:bullets){
-        SDL_Rect r=std::get<0>(i);
-        std::tuple<int,int> coords=std::get<1>(i);
-        int speed=std::get<2>(i);
-        SDL_Rect coordsrect{std::get<0>(coords)-5,std::get<1>(coords)-5,15,15};
-        bool push=true;
-        for (auto j:walls)
-        if (SDL_HasIntersection(&j->rect,&r))
-        push=false;
-        if (SDL_HasIntersection(&r,&coordsrect))
-        push=false;
-        if (push)
-        real.push_back(i);
-    }
-    bullets=real;
-    for (int i=0;i<bullets.size();i++){
-        move(&std::get<0>(bullets[i]),std::get<0>(std::get<1>(bullets[i])),std::get<1>(std::get<1>(bullets[i])),std::get<2>(bullets[i]),dt);
-        SDL_SetRenderDrawColor(rend,255,0,0,255);
-        SDL_RenderFillRect(rend,&std::get<0>(bullets[i]));
-    }
+    int damage;
+    Weapon(Scene** h){
+        scene=h;
+        damage=10;
     }
     virtual void reload(){
         current_cooldown=reltime;
         std::cout<<"COOLDOWN\n";
         inmag=mag_size;
     };
-    virtual void shoot(SDL_Rect who,int x,int y){
+    virtual void shoot(std::vector<Sprite*> *w,SDL_Rect who,int x,int y){
         SDL_Rect shrect{who.x+who.w/2,who.y+who.h/2,10,10};
         if (ammos<=0 || current_cooldown>0)
         return;
@@ -166,8 +174,18 @@ class Weapon{
         ammos-=1;
         inmag-=1;
         std::cout<<ammos<<std::endl;
-        auto i=std::make_tuple(shrect,std::make_tuple(x,y),speed);
-        bullets.push_back(i);
+        auto i=new Bullet{w,shrect,speed,std::make_tuple(x,y),damage};
+
+
+
+        (*scene)->sprites.push_back(i);
+
+
+        int buls=0;
+        for (auto i:(*scene)->sprites){
+            if (dynamic_cast<Bullet*>(i) && i->alive)
+                buls++;
+            }
         current_cooldown+=cooldown;
     };
     void update(float dt){
@@ -183,6 +201,7 @@ void loop(){
 }
 
 struct PlayerSave{
+    int hp;
     SDL_Rect rect;
     std::vector<Weapon*> weapons;
     void load_to(PlayerSave& obj){
@@ -190,12 +209,14 @@ struct PlayerSave{
         obj.weapons.clear();
         for (int i=0;i<weapons.size();i++)
             obj.weapons.push_back(new Weapon(*weapons[i]));
+        obj.hp=hp;
     }
     void load_from(PlayerSave& obj){
         rect=obj.rect;
         weapons.clear();
         for (int i=0;i<obj.weapons.size();i++)
             weapons.push_back(new Weapon(*(obj.weapons[i])));
+        hp=obj.hp;
     }
 };
 
@@ -213,8 +234,14 @@ ShopS* ss;
 
 class ShopS:public Scene{
     public:
-    std::vector<Weapon*> *weps;
-    ShopS(std::vector<Weapon*> *w) : weps(w){}
+    ShopS(std::vector<Weapon*> *w){}
+
+    ShopS(){}
+
+    static void operator delete(void* obj) noexcept{
+        
+    }
+
     void update() override{
         SDL_Event e;
         while (SDL_PollEvent(&e)){
@@ -223,7 +250,7 @@ class ShopS:public Scene{
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_e){
                     bool has=false;
-                    Weapon* n=new Weapon;
+                    Weapon* n=new Weapon(&currloop);
                     n->mag_size = 10;
                     n->inmag = 30;
                     n->ammos = 999;
@@ -231,11 +258,11 @@ class ShopS:public Scene{
                     n->cooldown = 0.1f;
                     n->current_cooldown = 0;
                     n->reltime=2.f;
-                    for (auto i:*weps)
+                    for (auto i:sv.weapons)
                         if (i==n)
                             has=true;
                     if (!has){
-                        weps->push_back(n);
+                        sv.weapons.push_back(n);
                         std::cout<<"PURCHASED"<<std::endl;
                     }
                 }   
@@ -246,6 +273,13 @@ class ShopS:public Scene{
                     switch_to(lscene,{});
                 }
             }
+            std::vector<Sprite*> real;
+            for (auto& i:sprites){
+                if (!i->alive)
+                    continue;
+                real.push_back(i);
+            }
+            sprites=real;
         }
         SDL_SetRenderDrawColor(rend,0,100,0,255);
         SDL_RenderClear(rend);
@@ -258,6 +292,11 @@ class Main : public Scene{
     public:
 
     std::vector<Sprite*> walls;
+
+
+    static void operator delete(void* obj) noexcept{
+
+    }
 
 
     class Shop:public Sprite{
@@ -274,12 +313,14 @@ class Main : public Scene{
 
     class Player : public Sprite{
         public:
+        float damage_cd=0;
+        int hp=100;
         Main* m;
         std::vector<Weapon*> weapons;
         int currwep=0;
         Player(Main* s){
             rect={0,0,100,100};
-            Weapon* wep=new Weapon;
+            Weapon* wep=new Weapon(&currloop);
             weapons.push_back(wep);
             wep->mag_size = 10;
             wep->inmag = 10;
@@ -291,8 +332,15 @@ class Main : public Scene{
             m=s;
         }
         void update() override{
+            if (hp<=0)
+                alive=false;
             if (!alive)
                 switch_to(gs,{});
+            damage_cd-=dt;
+            if (hp<0)
+                hp=0;
+            if (damage_cd>0)
+                int pass;
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
@@ -333,8 +381,15 @@ class Main : public Scene{
                     }
                 }
             }
-            if (mstate & SDL_BUTTON_LMASK)
-                weapons[currwep]->shoot(rect,x,y);
+            if (mstate & SDL_BUTTON_LMASK){
+                weapons[currwep]->shoot(&m->walls,rect,x,y);
+                int buls=0;
+                for (auto i:m->sprites){
+                    if (dynamic_cast<Bullet*>(i))
+                        buls++;
+                }
+                std::cout<<buls<<std::endl;
+            }
             SDL_SetRenderDrawColor(rend,255,0,0,255);
             SDL_RenderFillRect(rend,&rect);
             for (auto i:m->sprites){
@@ -386,26 +441,33 @@ class Main : public Scene{
 
     class Enemy:public Sprite{
         Sprite* p;
+        int damage;
+        Main* m;
         public:
-        Enemy(Sprite* player,SDL_Rect r) : p(player){
+        Enemy(Main* mm,Sprite* player,SDL_Rect r,int d=10) : p(player){
             rect=r;
             alive=true;
+            damage=d;
+            m=mm;
         }
         void update() override{
             if (!alive)
                 return;
-            std::vector<std::tuple<SDL_Rect,std::tuple<int,int>,int>> real;
-            for (auto& i:Weapon::bullets){
-                if (SDL_HasIntersection(&std::get<0>(i),&rect)){
-                    alive=false;
-                    continue;
-                }
-                real.push_back(i);
+            for (auto& i:m->sprites){
+                if (auto j=dynamic_cast<Bullet*>(i)){
+                    if (SDL_HasIntersection(&i->rect,&rect)){
+                        alive=false;
+                        j->alive=false;
+                    }
+                } 
             }
-            Weapon::bullets=real;
             move(&rect,p->rect.x,p->rect.y,200,dt);
-            if (SDL_HasIntersection(&rect,&p->rect))
-                p->alive=false;
+            if (SDL_HasIntersection(&rect,&p->rect)){
+                if (m->plr->damage_cd<=0){
+                    m->plr->hp-=damage;
+                    m->plr->damage_cd=2.f;
+                }
+            }
             SDL_SetRenderDrawColor(rend,0,255,0,255);
             SDL_RenderFillRect(rend,&rect);
         }
@@ -416,7 +478,7 @@ class Main : public Scene{
         plr=new Player(this);
         player=plr;
         walls.push_back(new Sprite{{300,300,200,200}});
-        sprites.push_back(new Enemy(player,{600,600,50,50}));
+        sprites.push_back(new Enemy(this,player,{600,600,50,50}));
         sprites.push_back(new Shop{{800,200,100,100}});
     }
 
@@ -427,7 +489,7 @@ class Main : public Scene{
         dt=(start-finish)/1000.f;
         finish=start;
         if (start-lastspawn>2000){
-            sprites.push_back(new Enemy(player,{600,600,50,50}));
+            sprites.push_back(new Enemy(this,player,{600,600,50,50}));
             lastspawn=start;
         }
         while (SDL_PollEvent(&e)){
@@ -458,8 +520,6 @@ class Main : public Scene{
         SDL_RenderClear(rend);
 
         player->update();
-        for (auto& i:sprites)
-            i->update();
         SDL_SetRenderDrawColor(rend,0,255,0,255);
         for (auto& i:walls)
             SDL_RenderFillRect(rend,&i->rect);
@@ -469,15 +529,17 @@ class Main : public Scene{
             v.setCursor(1);
             SDL_RenderCopy(rend,t,nullptr,&player->rect);
         }
-        Weapon::update_all(walls);
-        SDL_RenderPresent(rend);
         std::vector<Sprite*> real;
         for (auto& i:sprites){
             if (!i->alive)
                 continue;
+            i->update();
             real.push_back(i);
         }
         sprites=real;
+
+        SDL_RenderPresent(rend);
+
     }
 };
 
@@ -543,6 +605,11 @@ class Second : public Scene{
 
 
     public:
+
+    static void operator delete(void* obj) noexcept{
+        
+    }
+
     Second(){
         player=new Player(this);
         player->rect.x = 200; 
@@ -572,6 +639,14 @@ class Second : public Scene{
             SDL_SetRenderDrawColor(rend,0,255,0,255);
             SDL_RenderFillRect(rend,&i->rect);
         }
+        std::vector<Sprite*> real;
+        for (auto& i:sprites){
+            if (!i->alive)
+                continue;
+            i->update();
+            real.push_back(i);
+        }
+        sprites=real;
         SDL_RenderPresent(rend);
     }
 };
@@ -579,6 +654,10 @@ class Second : public Scene{
 class GameOver:public Scene{
     SDL_Texture* rendtxt;
     public:
+
+    static void operator delete(void* obj) noexcept{
+        
+    }
 
     GameOver(){
         SDL_Surface* surf=TTF_RenderText_Solid(arial,"Game Over",SDL_Color{255,255,255,255});
