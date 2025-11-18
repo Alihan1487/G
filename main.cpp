@@ -108,7 +108,7 @@ void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
     float dy = targetY - rect->y;
     float dist = SDL_sqrtf(dx*dx + dy*dy);
 
-    if (dist < 3.0f) return; 
+    if (dist < 1.0f) return; 
 
     dx /= dist;
     dy /= dist;
@@ -128,9 +128,9 @@ class Bullet: public Sprite{
         if (!alive){
             return;
         }
-        float dx=rect.x-std::get<0>(coords);
-        float dy=rect.y-std::get<1>(coords);
-        if (sqrt(dx*dx+dy*dy)<5.f){
+        float dx=std::get<0>(coords)-rect.x;
+        float dy=std::get<1>(coords)-rect.y;
+        if (sqrt(dx*dx+dy*dy)<10.f){
             alive=false;
         }
         for (auto& i:*walls){
@@ -420,6 +420,7 @@ class Main : public Scene{
         s.load_from(sv);
         plr->rect=s.rect;
         plr->weapons.clear();
+        plr->hp=sv.hp;
         for (int i=0;i<s.weapons.size();i++)
             plr->weapons.push_back(new Weapon(*(s.weapons[i])));
         if (dynamic_cast<ShopS*>(Scene::lscene)){
@@ -433,6 +434,7 @@ class Main : public Scene{
         PlayerSave s;
         s.rect=plr->rect;
         s.weapons.clear();
+        s.hp=plr->hp;
         for (int i=0;i<plr->weapons.size();i++)
             s.weapons.push_back(new Weapon(*(plr->weapons[i])));
         s.load_to(sv);
