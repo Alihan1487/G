@@ -158,6 +158,15 @@ class Weapon{
         scene=h;
         damage=1;
     }
+    bool operator==(const Weapon& o) const {
+            return speed == o.speed &&
+            mag_size == o.mag_size &&
+            cooldown == o.cooldown &&
+            reltime == o.reltime &&
+            damage == o.damage;
+        }
+
+
     virtual void reload(){
         current_cooldown=reltime;
         std::cout<<"COOLDOWN\n";
@@ -259,7 +268,7 @@ class ShopS:public Scene{
                     n->current_cooldown = 0;
                     n->reltime=2.f;
                     for (auto i:sv.weapons)
-                        if (i==n)
+                        if (*i==*n)
                             has=true;
                     if (!has){
                         sv.weapons.push_back(n);
@@ -270,6 +279,7 @@ class ShopS:public Scene{
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_ESCAPE){
                     std::cout<<"ESCAPE"<<std::endl;
+                    sv.rect={0,0,sv.rect.w,sv.rect.h};
                     switch_to(lscene,{});
                 }
             }
