@@ -241,11 +241,13 @@ class Main;
 class Second;
 class GameOver;
 class ShopS;
+class Third;
 
 Main* m;
 Second* s;
 GameOver* gs;
 ShopS* ss;
+Third* t;
 
 class ShopS:public Scene{
     public:
@@ -562,6 +564,147 @@ class Main : public Scene{
     }
 };
 
+class Third : public Scene{
+    public:
+    std::vector<Sprite*> walls;
+    class Player : public Sprite{
+        public:
+        float damage_cd=0.f;
+        int hp=5;
+        Third* m;
+        std::vector<Weapon*> weapons;
+        int currwep=0;
+        Player(Third* s){
+            rect={0,0,100,100};
+            Weapon* wep=new Weapon(&currloop);
+            weapons.push_back(wep);
+            wep->mag_size = 50;
+            wep->inmag = 10;
+            wep->ammos = 50;
+            wep->speed = 1500;
+            wep->cooldown = 0.1;
+            wep->current_cooldown = 0;
+            wep->reltime=2.f;
+            m=s;
+        }
+        void update() override{
+            if (hp<=0)
+                alive=false;
+            if (!alive)
+                switch_to(gs,{});
+            if (damage_cd>0)
+                damage_cd-=dt;
+            if (damage_cd<0)
+                damage_cd=0;
+            if (hp<0)
+                hp=0;
+            const Uint8* kstate=SDL_GetKeyboardState(NULL);
+            int x,y;
+            Uint32 mstate=SDL_GetMouseState(&x,&y);
+            weapons[currwep]->update(dt);
+            if (kstate[SDL_SCANCODE_W]){
+                rect.y-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y+crect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_S]){
+                rect.y+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.y=crect.y-rect.h;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_A]){
+                rect.x-=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x+crect.w;
+                    }
+                }
+            }
+            if (kstate[SDL_SCANCODE_D]){
+                rect.x+=400*dt;
+                for (auto& i: m->walls){
+                    if (SDL_HasIntersection(&rect,&i->rect)){
+                        auto crect=i->rect;
+                        rect.x=crect.x-rect.w;
+                    }
+                }
+            }
+            if (mstate & SDL_BUTTON_LMASK){
+                weapons[currwep]->shoot(&m->walls,rect,x,y);
+                int buls=0;
+                for (auto i:m->sprites){
+                    if (dynamic_cast<Bullet*>(i))
+                        buls++;
+                }
+                std::cout<<buls<<std::endl;
+            }
+            SDL_SetRenderDrawColor(rend,0,0,255,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+        void evupdate(SDL_Event &e) override{
+            if (e.type==SDL_KEYDOWN)
+                if(e.key.keysym.sym==SDLK_r){
+                    weapons[currwep]->reload();
+                }
+            if (e.type==SDL_KEYDOWN)
+                if(e.key.keysym.sym==SDLK_f){
+                    currwep = (currwep + 1) % weapons.size();
+                }
+            
+        }
+        ~Player(){
+            for (auto i:weapons)
+                delete i;
+        }
+    };
+    Player* plr;
+    Third(){
+        plr=new Player(this);
+        walls.push_back(new Sprite({400,400,200,300}));
+    }
+    ~Third(){
+        delete plr;
+        for (auto i:sprites)
+            delete i;
+    }
+    void On(std::initializer_list<void*> list) override{
+        std::cout<<"Third turned on"<<std::endl;
+    }
+    void update() override{
+        SDL_Event e;
+        while (SDL_PollEvent(&e)){
+            if (e.type==SDL_QUIT)
+                emscripten_cancel_main_loop();
+            if (e.type==SDL_KEYDOWN)
+                if (e.key.keysym.sym==SDLK_q)
+                    switch_to(s,{});
+        }
+
+        SDL_SetRenderDrawColor(rend,0,0,0,255);
+        SDL_RenderClear(rend);
+
+        for (auto i:sprites)
+            i->update();
+        plr->update();
+        for (auto i:walls){
+            SDL_SetRenderDrawColor(rend,0,255,0,255);
+            SDL_RenderFillRect(rend,&i->rect);
+        }
+
+        SDL_RenderPresent(rend);
+
+    }
+};
+
 class Second : public Scene{
 
 
@@ -625,10 +768,6 @@ class Second : public Scene{
 
     public:
 
-    static void operator delete(void* obj) noexcept{
-        
-    }
-
     Second(){
         player=new Player(this);
         player->rect.x = 200; 
@@ -645,9 +784,11 @@ class Second : public Scene{
             if (e.type==SDL_QUIT)
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN)
-                if (e.key.keysym.sym==SDLK_q){
+                if (e.key.keysym.sym==SDLK_q)
                     switch_to(m,{});
-                }
+            if (e.type==SDL_KEYDOWN)
+                if (e.key.keysym.sym==SDLK_e)
+                    switch_to(t,{});
         };
 
         SDL_SetRenderDrawColor(rend, 0, 100, 255, 255);
@@ -774,10 +915,9 @@ int main(){
     m=new Main;
     s=new Second;
     gs=new GameOver;
-    {
-        Main::Player* o=(Main::Player*)m->player;
-        ss=new ShopS;
-    }
+    ss=new ShopS;
+    t=new Third;
+
     Vid&& l=Vid("/assets/frames",rend);
     v=l;
     std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
