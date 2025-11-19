@@ -256,6 +256,9 @@ class ShopS:public Scene{
     
 
     void update() override{
+        Scene::start=SDL_GetTicks();
+        dt=Scene::start-Scene::finish;
+        Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
             if (e.type==SDL_QUIT)
@@ -680,6 +683,9 @@ class Third : public Scene{
         std::cout<<"Third turned on"<<std::endl;
     }
     void update() override{
+        Scene::start=SDL_GetTicks();
+        dt=Scene::start-Scene::finish;
+        Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
             if (e.type==SDL_QUIT)
@@ -832,6 +838,9 @@ class GameOver:public Scene{
     }
     
     void update() override{
+        Scene::start=SDL_GetTicks();
+        dt=Scene::start-Scene::finish;
+        Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
             if (e.type==SDL_QUIT)
@@ -839,7 +848,6 @@ class GameOver:public Scene{
             if (e.type == SDL_KEYDOWN){
                 delete m;
                 m = new Main;
-                m->sprites.clear();
                 sv.rect.x=0;
                 sv.rect.y=0;
                 sv.hp=5;

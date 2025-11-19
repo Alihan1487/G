@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Emscripten Game</title>
+    <link rel="icon" type="image/png" href="favicon.ico">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    {{{ SCRIPT }}}
+    <script>
+        // Привязываем canvas к Module
+        var canvas = document.getElementById('canvas');
+        if (Module) {
+            Module['canvas'] = canvas;
+        }
+    </script>
+</body>
+</html>
