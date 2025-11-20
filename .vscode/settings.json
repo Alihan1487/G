@@ -88,6 +88,8 @@
         "valarray": "cpp",
         "*.def": "cpp",
         "*.inc": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "any": "cpp",
+        "barrier": "cpp"
     }
 }

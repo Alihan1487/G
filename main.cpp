@@ -15,6 +15,7 @@
 SDL_Renderer* rend;
 SDL_Window* win;
 TTF_Font* arial;
+SDL_Texture* plrtxt;
 float dt=0;
 
 class Vid{
@@ -206,10 +207,6 @@ class Weapon{
 
 
         int buls=0;
-        for (auto i:(*scene)->sprites){
-            if (dynamic_cast<Bullet*>(i) && i->alive)
-                buls++;
-            }
         current_cooldown+=cooldown;
     };
     void update(float dt){
@@ -266,7 +263,7 @@ class ShopS:public Scene{
 
     void update() override{
         Scene::start=SDL_GetTicks();
-        dt=Scene::start-Scene::finish;
+        dt=(Scene::start-Scene::finish)/1000.f;
         Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
@@ -339,6 +336,7 @@ class Main : public Scene{
         Main* m;
         std::vector<Weapon*> weapons;
         int currwep=0;
+        bool moving=false;
         Player(Main* s){
             rect={0,0,100,100};
             Weapon* wep=new Weapon(&currloop);
@@ -367,7 +365,9 @@ class Main : public Scene{
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
             weapons[currwep]->update(dt);
+            moving=false;
             if (kstate[SDL_SCANCODE_W]){
+                moving=true;
                 rect.y-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -377,6 +377,7 @@ class Main : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_S]){
+                moving=true;
                 rect.y+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -386,6 +387,7 @@ class Main : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_A]){
+                moving=true;
                 rect.x-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -395,6 +397,7 @@ class Main : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_D]){
+                moving=true;
                 rect.x+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -410,10 +413,23 @@ class Main : public Scene{
                     if (dynamic_cast<Bullet*>(i))
                         buls++;
                 }
-                std::cout<<buls<<std::endl;
             }
-            SDL_SetRenderDrawColor(rend,255,0,0,255);
-            SDL_RenderFillRect(rend,&rect);
+            if (damage_cd>0){
+                SDL_SetRenderDrawColor(rend,255,0,0,255);
+                SDL_RenderFillRect(rend,&rect);
+            }
+            else if (moving){
+                SDL_Texture* tt=v.Get();
+                if (!tt){
+                    v.setCursor(0);
+                    tt=v.Get();
+                }
+                SDL_RenderCopy(rend,tt,nullptr,&rect);
+            }
+            else if(!moving){
+                v.setCursor(0);
+                SDL_RenderCopy(rend,plrtxt,nullptr,&rect);
+            }
             for (auto i:m->sprites){
                 if (dynamic_cast<Shop*>(i)){
                     if (SDL_HasIntersection(&rect,&i->rect))
@@ -486,7 +502,6 @@ class Main : public Scene{
             move(&rect,p->rect.x,p->rect.y,200,dt);
             if (SDL_HasIntersection(&rect,&p->rect)){
                 if (!(m->plr->damage_cd>0)){
-                    std::cout<<"ATTACKED"<<std::endl;
                     m->plr->hp-=damage;
                     m->plr->damage_cd=2.f;
                 }
@@ -546,16 +561,6 @@ class Main : public Scene{
         SDL_SetRenderDrawColor(rend,0,255,0,255);
         for (auto& i:walls)
             SDL_RenderFillRect(rend,&i->rect);
-        {
-            SDL_Texture* t=v.Get();
-            if (!t){
-                v.setCursor(1);
-                std::cout<<"ERROR:"<<IMG_GetError()<<std::endl;
-            }
-            if (!(plr->damage_cd>0)){
-                SDL_RenderCopy(rend,t,nullptr,&player->rect);
-            }
-        }
         std::vector<Sprite*> real;
         for (auto& i:sprites){
             if (!i->alive)
@@ -580,6 +585,7 @@ class Third : public Scene{
     public:
     std::vector<Sprite*> walls;
     class Player : public Sprite{
+        bool moving=false;
         public:
         float damage_cd=0.f;
         int hp=5;
@@ -614,7 +620,9 @@ class Third : public Scene{
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
             weapons[currwep]->update(dt);
+            moving=false;
             if (kstate[SDL_SCANCODE_W]){
+                moving=true;
                 rect.y-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -624,6 +632,7 @@ class Third : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_S]){
+                moving=true;
                 rect.y+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -633,6 +642,7 @@ class Third : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_A]){
+                moving=true;
                 rect.x-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -642,6 +652,7 @@ class Third : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_D]){
+                moving=true;
                 rect.x+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -650,17 +661,26 @@ class Third : public Scene{
                     }
                 }
             }
-            if (mstate & SDL_BUTTON_LMASK){
+            if (mstate & SDL_BUTTON_LMASK)
                 weapons[currwep]->shoot(&m->walls,rect,x,y);
-                int buls=0;
-                for (auto i:m->sprites){
-                    if (dynamic_cast<Bullet*>(i))
-                        buls++;
-                }
-                std::cout<<buls<<std::endl;
+
+            if (damage_cd>0){
+                SDL_SetRenderDrawColor(rend,255,0,0,255);
+                SDL_RenderFillRect(rend,&rect);
             }
-            SDL_SetRenderDrawColor(rend,0,0,255,255);
-            SDL_RenderFillRect(rend,&rect);
+            else if (moving){
+                SDL_Texture* tt=v.Get();
+                if (!tt){
+                    v.setCursor(0);
+                    tt=v.Get();
+                }
+                SDL_RenderCopy(rend,tt,nullptr,&rect);
+            }
+            else if(!moving){
+                v.setCursor(0);
+                SDL_RenderCopy(rend,plrtxt,nullptr,&rect);
+            }
+
         }
         void evupdate(SDL_Event &e) override{
             if (e.type==SDL_KEYDOWN)
@@ -693,7 +713,7 @@ class Third : public Scene{
     }
     void update() override{
         Scene::start=SDL_GetTicks();
-        dt=Scene::start-Scene::finish;
+        dt=(Scene::start-Scene::finish)/1000.f;
         Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
@@ -702,6 +722,8 @@ class Third : public Scene{
             if (e.type==SDL_KEYDOWN)
                 if (e.key.keysym.sym==SDLK_q)
                     switch_to(s,{});
+            for (auto& i:sprites)
+                i->evupdate(e);
         }
 
         SDL_SetRenderDrawColor(rend,0,0,0,255);
@@ -848,7 +870,7 @@ class GameOver:public Scene{
     
     void update() override{
         Scene::start=SDL_GetTicks();
-        dt=Scene::start-Scene::finish;
+        dt=(Scene::start-Scene::finish)/1000.f;
         Scene::finish=Scene::start;
         SDL_Event e;
         while (SDL_PollEvent(&e)){
@@ -920,14 +942,24 @@ int main(){
     IMG_Init(IMG_INIT_PNG);
     TTF_Init();
 
+    win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
+    rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
+
     arial=TTF_OpenFont("assets/arialmt.ttf",100);
     if (!arial){
-        std::cerr<<"FAILKED TO LOAD FONT ARIAL:"<<TTF_GetError()<<std::endl;
+        std::cerr<<"FAILED TO LOAD FONT ARIAL:"<<TTF_GetError()<<std::endl;
         return 1;
     }
 
-    win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
-    rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
+    {
+        SDL_Surface* ss=IMG_Load("assets/plr.png");
+        if (!ss){
+            std::cerr<<"COULDNT LOAD PLAYER IMAGE CAUSE:"<<IMG_GetError()<<std::endl;
+            return 1;
+        }
+        plrtxt=SDL_CreateTextureFromSurface(rend,ss);
+    }
+
 
     m=new Main;
     s=new Second;
@@ -935,7 +967,7 @@ int main(){
     ss=new ShopS;
     t=new Third;
 
-    Vid&& l=Vid("/assets/frames",rend,30);
+    Vid&& l=Vid("/assets/plranim",rend,10);
     v=l;
     std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
     currloop=m;
