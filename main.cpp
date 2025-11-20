@@ -10,6 +10,7 @@
 #include <tuple>
 #include <typeinfo>
 #include <initializer_list>
+#include <cmath>
 
 SDL_Renderer* rend;
 SDL_Window* win;
@@ -21,8 +22,11 @@ class Vid{
     std::vector<SDL_Texture*> txts;
     SDL_Renderer* r;
     int curr=0;
+    int fps;
+    float acc=0.f;
     public:
-    Vid(std::string foldername,SDL_Renderer* ren){
+    Vid(std::string foldername,SDL_Renderer* ren,int f=10){
+        fps=f;
         name=foldername;
         int count=1;
         r=ren;
@@ -51,7 +55,12 @@ class Vid{
         if (curr>=txts.size())
             return nullptr;
         auto frame=txts[curr];
-        curr++;
+        acc+=dt;
+        float frt=1.f/fps;
+        while (acc>=frt){
+            acc-=frt;
+            curr++;
+        }
         return frame;
     }
     SDL_Texture* Get(int index){
@@ -926,7 +935,7 @@ int main(){
     ss=new ShopS;
     t=new Third;
 
-    Vid&& l=Vid("/assets/frames",rend);
+    Vid&& l=Vid("/assets/frames",rend,30);
     v=l;
     std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
     currloop=m;
