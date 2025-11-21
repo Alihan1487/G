@@ -9,10 +9,13 @@ class Vid{
     std::vector<SDL_Texture*> txts;
     SDL_Renderer* r;
     int curr=0;
+    int fps;
+    float acc=0.f;
     public:
-    Vid(std::string foldername,SDL_Renderer* ren){
+    Vid(std::string foldername,SDL_Renderer* ren,int f=10){
+        fps=f;
         name=foldername;
-        int count=0;
+        int count=1;
         r=ren;
         while (true){
             SDL_Surface* surf;
@@ -28,11 +31,24 @@ class Vid{
             SDL_FreeSurface(surf);
         }
     }
+    Vid(){};
+    ~Vid(){
+        std::cout<<"DESTROYED VID OBJECT"<<std::endl;
+        for (auto i:txts)
+            SDL_DestroyTexture(i);
+    }
+
     SDL_Texture* Get(){
         if (curr>=txts.size())
             return nullptr;
-        curr++;
-        return txts[curr];
+        auto frame=txts[curr];
+        acc+=dt;
+        float frt=1.f/fps;
+        while (acc>=frt){
+            acc-=frt;
+            curr++;
+        }
+        return frame;
     }
     SDL_Texture* Get(int index){
         if (!(index>=txts.size() || index<0))
@@ -47,5 +63,8 @@ class Vid{
     }
     int size(){
         return txts.size();
+    }
+    int GetCursor(){
+        return curr;
     }
 };
