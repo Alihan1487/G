@@ -81,6 +81,22 @@ class Vid{
     int GetCursor(){
         return curr;
     }
+    float getFPS(){
+        std::ifstream file(name+"/meta.txt");
+        if (!file.is_open())
+            return 0.f;
+        float a;
+        float b;
+        std::string t;
+        std::getline(file,t,'/');
+        a=std::stof(t);
+        std::getline(file,t);
+        b=std::stof(t);
+        return a/b;
+    }
+    void setFPS(float fps){
+        this->fps=fps;
+    }
 };
 
 Vid v;
@@ -970,6 +986,7 @@ int main(){
     Vid&& l=Vid("/assets/plranim",rend,10);
     v=l;
     std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
+    std::cout<<"FPS:"<<v.getFPS()<<std::endl;
     currloop=m;
     (*m).player->rect.x=200;
 
