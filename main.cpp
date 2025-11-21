@@ -766,6 +766,7 @@ class Second : public Scene{
 
     class Player : public Sprite{
         Second* m;
+        bool moving=false;
         public:
         Player(Second* s){
             rect={0,0,100,100};
@@ -774,7 +775,9 @@ class Second : public Scene{
         void update() override{
 
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
+            moving=false;
             if (kstate[SDL_SCANCODE_W]){
+                moving=true;
                 rect.y-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -784,6 +787,7 @@ class Second : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_S]){
+                moving=true;
                 rect.y+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -793,6 +797,7 @@ class Second : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_A]){
+                moving=true;
                 rect.x-=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -802,6 +807,7 @@ class Second : public Scene{
                 }
             }
             if (kstate[SDL_SCANCODE_D]){
+                moving=true;
                 rect.x+=400*dt;
                 for (auto& i: m->walls){
                     if (SDL_HasIntersection(&rect,&i->rect)){
@@ -811,10 +817,18 @@ class Second : public Scene{
                 }
             }
 
-            
-
-            SDL_SetRenderDrawColor(rend,255,0,0,255);
-            SDL_RenderFillRect(rend,&rect);
+            if (!moving){
+                v.setCursor(0);
+                SDL_RenderCopy(rend,plrtxt,nullptr,&rect);
+            }
+            if (moving){
+                auto t=v.Get();
+                if (!t){
+                    v.setCursor(0);
+                    t=v.Get();
+                }
+                SDL_RenderCopy(rend,t,nullptr,&rect);
+            }
         }
     };
 
