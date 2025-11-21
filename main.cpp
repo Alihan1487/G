@@ -18,6 +18,7 @@ TTF_Font* arial;
 SDL_Texture* plrtxt;
 float dt=0;
 
+//Loades frames from folder and reads meta.txt
 class Vid{
     std::string name;
     std::vector<SDL_Texture*> txts;
@@ -45,6 +46,7 @@ class Vid{
             SDL_FreeSurface(surf);
         }
     }
+    //default one
     Vid(){};
     ~Vid(){
         std::cout<<"DESTROYED VID OBJECT"<<std::endl;
@@ -52,6 +54,7 @@ class Vid{
             SDL_DestroyTexture(i);
     }
 
+    //returns a next frame or nullptr if out of range
     SDL_Texture* Get(){
         if (curr>=txts.size())
             return nullptr;
@@ -64,6 +67,7 @@ class Vid{
         }
         return frame;
     }
+    //returns requested frame and nullptr if out of range
     SDL_Texture* Get(int index){
         if (!(index>=txts.size() || index<0))
             return txts[index];
@@ -75,12 +79,15 @@ class Vid{
             return;
         curr=where;
     }
+    //size
     int size(){
         return txts.size();
     }
+    //where is the cursor
     int GetCursor(){
         return curr;
     }
+    //the fps from meta.txt
     float getFPS(){
         std::ifstream file(name+"/meta.txt");
         if (!file.is_open())
@@ -94,43 +101,58 @@ class Vid{
         b=std::stof(t);
         return a/b;
     }
+    //sets fps
     void setFPS(float fps){
         this->fps=fps;
     }
 };
 
+//the video (plranim)
 Vid v;
 
-
+//basic Sprite class
 class Sprite{
     public:
     bool alive=true;
     SDL_Rect rect;
+    //for dummies
     Sprite(SDL_Rect r) : rect(r){}
     Sprite(){};
+    //update
     virtual void update(){};
+    //to handle events
     virtual void evupdate(SDL_Event &e){};
     virtual ~Sprite()=default;
 };
 
+//basic Scene class
 class Scene{
     public:
+    //last scene
     inline static Scene* lscene=nullptr;
     inline static std::vector<Scene*> scenes;
+    //for delta time
     inline static int start=0;
     inline static int finish=0;
+    //active scene or not
     bool active=false;
     Sprite* player;
+    //sprites
     std::vector<Sprite*> sprites;
     virtual void update(){};
+    //when scene turned on...
     virtual void On(std::initializer_list<void*> args){};
+    //or off
     virtual void Off(){};
+    //scene reset
     virtual void reset(){};
     virtual ~Scene()=default;
 };
 
+//current loop (Scene)
 Scene* currloop;
 
+//scene manager
 void switch_to(void* s,std::initializer_list<void*> args){
     currloop->Off();
     Scene::lscene=currloop;
@@ -138,6 +160,7 @@ void switch_to(void* s,std::initializer_list<void*> args){
     currloop->On(args);
 }
 
+//move rect to targetX,targetY
 void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
     float dx = targetX - rect->x;
     float dy = targetY - rect->y;
@@ -152,34 +175,44 @@ void move(SDL_Rect* rect, int targetX, int targetY, float speed, float delta) {
     rect->y += dy * speed * delta;
 }
 
+//Bullet is Sprite's... son?
 class Bullet: public Sprite{
     public:
+    //parametres
     int speed;
     std::tuple<int,int> coords;
     int damage;
+    //for collision
     std::vector<Sprite*> *walls;
     Bullet( std::vector<Sprite*> *w,SDL_Rect r,int s,std::tuple<int,int> c,int d) : speed{s},coords{c},damage{d}{rect=r;walls=w;alive=true;}
+    //update
     void update() override{
         if (!alive){
             return;
         }
+        //difference with coordinates
         float dx=std::get<0>(coords)-rect.x;
         float dy=std::get<1>(coords)-rect.y;
         if (sqrt(dx*dx+dy*dy)<10.f){
             alive=false;
         }
+        //check for walls
         for (auto& i:*walls){
             if (SDL_HasIntersection(&rect,&i->rect))
                 alive=false;
         }
+
+        //other thingies
         move(&rect,std::get<0>(coords),std::get<1>(coords),speed,dt);
         SDL_SetRenderDrawColor(rend,255,0,0,255);
         SDL_RenderFillRect(rend,&rect);
     }
 };
 
+//class Weapon, something that shoots
 class Weapon{
     public:
+    //i need this one
     Scene** scene;
     int inmag;
     int speed;
@@ -193,6 +226,8 @@ class Weapon{
         scene=h;
         damage=1;
     }
+
+    //for check
     bool operator==(const Weapon& o) const {
             return speed == o.speed &&
             mag_size == o.mag_size &&
@@ -201,12 +236,14 @@ class Weapon{
             damage == o.damage;
         }
 
-
+    //virtual reload method
     virtual void reload(){
         current_cooldown=reltime;
         std::cout<<"COOLDOWN\n";
         inmag=mag_size;
     };
+
+    //virtual shoot method
     virtual void shoot(std::vector<Sprite*> *w,SDL_Rect who,int x,int y){
         SDL_Rect shrect{who.x+who.w/2,who.y+who.h/2,10,10};
         if (ammos<=0 || current_cooldown>0)
@@ -225,21 +262,25 @@ class Weapon{
         int buls=0;
         current_cooldown+=cooldown;
     };
+    //update delta and etc.
     void update(float dt){
         if (current_cooldown>0)
             current_cooldown-=dt;
         if (current_cooldown<0)
             current_cooldown=0;
     }
+    //Polymorphism is hard stuff...
     virtual Weapon* clone() const{
         return new Weapon(*this);
     }
 };
 
+//base loop for emscripten_set_main_loop
 void loop(){
     currloop->update();
 }
 
+//for data sync
 struct PlayerSave{
     int hp;
     std::vector<Weapon*> weapons;
@@ -257,8 +298,11 @@ struct PlayerSave{
     }
 };
 
+//global save
 PlayerSave sv;
 
+
+//pre defenitions
 class Main;
 class Second;
 class GameOver;
@@ -271,6 +315,7 @@ GameOver* gs;
 ShopS* ss;
 Third* t;
 
+//the shop class
 class ShopS:public Scene{
     public:
     ShopS(){}
@@ -287,6 +332,7 @@ class ShopS:public Scene{
                 emscripten_cancel_main_loop();
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_e){
+                    //if tryes to purchase
                     bool has=false;
                     Weapon* n=new Weapon(&currloop);
                     n->mag_size = 10;
@@ -299,18 +345,24 @@ class ShopS:public Scene{
                     for (auto i:sv.weapons)
                         if (*i==*n)
                             has=true;
+                    //if he doesn't has
                     if (!has){
                         sv.weapons.push_back(n);
                         std::cout<<"PURCHASED"<<std::endl;
                     }
+                    //he already has
+                    else
+                        delete n;
                 }   
             }
+            //leaving
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_ESCAPE){
                     std::cout<<"ESCAPE"<<std::endl;
                     switch_to(lscene,{});
                 }
             }
+            //just base stuff that other scenes have
             std::vector<Sprite*> real;
             for (auto& i:sprites){
                 if (!i->alive)
@@ -319,6 +371,7 @@ class ShopS:public Scene{
             }
             sprites=real;
         }
+        //render
         SDL_SetRenderDrawColor(rend,0,100,0,255);
         SDL_RenderClear(rend);
 
@@ -326,12 +379,13 @@ class ShopS:public Scene{
     }
 };
 
+//the main scene
 class Main : public Scene{
     public:
 
     std::vector<Sprite*> walls;
 
-
+    //(candy) shop
     class Shop:public Sprite{
         public:
         Shop(SDL_Rect r){
@@ -354,6 +408,7 @@ class Main : public Scene{
         bool moving=false;
         Player(Main* s){
             rect={0,0,100,100};
+            //setting base weapon
             Weapon* wep=new Weapon(&currloop);
             weapons.push_back(wep);
             wep->mag_size = 10;
@@ -365,7 +420,9 @@ class Main : public Scene{
             wep->reltime=2.f;
             m=s;
         }
+        //update
         void update() override{
+            //checks
             if (hp<=0)
                 alive=false;
             if (!alive)
@@ -376,9 +433,11 @@ class Main : public Scene{
                 damage_cd=0;
             if (hp<0)
                 hp=0;
+            //move logic
             const Uint8* kstate=SDL_GetKeyboardState(NULL);
             int x,y;
             Uint32 mstate=SDL_GetMouseState(&x,&y);
+            //weapin update;
             weapons[currwep]->update(dt);
             moving=false;
             if (kstate[SDL_SCANCODE_W]){
@@ -429,10 +488,13 @@ class Main : public Scene{
                         buls++;
                 }
             }
+            //render
+            //if damaged
             if (damage_cd>0){
                 SDL_SetRenderDrawColor(rend,255,0,0,255);
                 SDL_RenderFillRect(rend,&rect);
             }
+            //if he walking
             else if (moving){
                 SDL_Texture* tt=v.Get();
                 if (!tt){
@@ -441,10 +503,12 @@ class Main : public Scene{
                 }
                 SDL_RenderCopy(rend,tt,nullptr,&rect);
             }
+            //if he is not walking
             else if(!moving){
                 v.setCursor(0);
                 SDL_RenderCopy(rend,plrtxt,nullptr,&rect);
             }
+            //is colided with shop?
             for (auto i:m->sprites){
                 if (dynamic_cast<Shop*>(i)){
                     if (SDL_HasIntersection(&rect,&i->rect))
@@ -452,6 +516,7 @@ class Main : public Scene{
                 }
             }
         }
+        //reload and weapon swap stuff
         void evupdate(SDL_Event &e) override{
             if (e.type==SDL_KEYDOWN)
                 if(e.key.keysym.sym==SDLK_r){
@@ -463,14 +528,17 @@ class Main : public Scene{
                 }
             
         }
+        //free memory
         ~Player(){
             for (auto i:weapons)
                 delete i;
         }
     };
 
+    //i need this one too
     Player* plr;
 
+    //Main::On()
     void On(std::initializer_list<void*> args) override{
         PlayerSave s;
         for (auto i:m->sprites){
@@ -487,6 +555,7 @@ class Main : public Scene{
             plr->weapons.push_back(new Weapon(*(s.weapons[i])));
     }
 
+    //Main::Off()
     void Off() override{
         PlayerSave s;
         s.weapons.clear();
@@ -497,6 +566,7 @@ class Main : public Scene{
     }
 
 
+    //Enemy
     class Enemy:public Sprite{
         Sprite* p;
         int damage;
@@ -509,6 +579,7 @@ class Main : public Scene{
             damage=d;
             m=mm;
         }
+        //updates and attacks player
         void update() override{
             if (!alive)
                 return;
@@ -541,6 +612,7 @@ class Main : public Scene{
         sprites.push_back(new Shop{{800,200,100,100}});
     }
 
+    //updates and connects all
     void update() override{
         static int lastspawn=0;
         SDL_Event e;
@@ -594,6 +666,7 @@ class Main : public Scene{
         SDL_RenderPresent(rend);
 
     }
+    //dtor
     ~Main(){
         for (auto i:walls)
             delete i;
@@ -602,9 +675,11 @@ class Main : public Scene{
     }
 };
 
+//Third scene
 class Third : public Scene{
     public:
     std::vector<Sprite*> walls;
+    //Same with Main
     class Player : public Sprite{
         bool moving=false;
         public:
@@ -721,6 +796,7 @@ class Third : public Scene{
     };
     Player* plr;
 
+    //load
     virtual void On(std::initializer_list<void*> list) override{
         plr->hp=sv.hp;
         std::cout<<"HP:"<<plr->hp<<std::endl;
@@ -729,6 +805,7 @@ class Third : public Scene{
             plr->weapons.push_back(new Weapon(*(sv.weapons[i])));
     }
 
+    //save
     virtual void Off() override{
         sv.hp=plr->hp;
         sv.weapons.clear();
@@ -736,6 +813,7 @@ class Third : public Scene{
             sv.weapons.push_back(new Weapon(*(plr->weapons[i])));
     }
 
+    //Enemy
     class Enemy:public Sprite{
         Sprite* p;
         int damage;
@@ -770,16 +848,19 @@ class Third : public Scene{
             SDL_RenderFillRect(rend,&rect);
         }
     };
+    //ctor
     Third(){
         plr=new Player(this);
         walls.push_back(new Sprite({400,400,200,300}));
     }
+    //dtor
     ~Third(){
         delete plr;
         for (auto i:sprites)
             delete i;
     }
     int lastspawn=0;
+    //nothing new
     void update() override{
         Scene::start=SDL_GetTicks();
         dt=(Scene::start-Scene::finish)/1000.f;
@@ -823,6 +904,7 @@ class Third : public Scene{
     }
 };
 
+//nothing to explain at all
 class Second : public Scene{
 
 
@@ -949,20 +1031,19 @@ class Second : public Scene{
     }
 };
 
+//Game over
 class GameOver:public Scene{
     SDL_Texture* rendtxt;
     public:
 
-    static void operator delete(void* obj) noexcept{
-        
-    }
-
+    //ctor
     GameOver(){
         SDL_Surface* surf=TTF_RenderText_Solid(arial,"Game Over",SDL_Color{255,255,255,255});
         rendtxt=SDL_CreateTextureFromSurface(rend,surf);
         SDL_FreeSurface(surf);
     }
     
+    //just update delta and delete old scene
     void update() override{
         Scene::start=SDL_GetTicks();
         dt=(Scene::start-Scene::finish)/1000.f;
@@ -994,7 +1075,7 @@ class GameOver:public Scene{
     }
 };
 
-
+//load FS
 extern "C" void load(){
     std::ofstream f("save/soo.txt", std::ios::app);
     std::ifstream ff("/save/soo.txt");
@@ -1008,6 +1089,7 @@ extern "C" void load(){
     ff.close();
 }
 
+//save FS
 extern "C" void save(){
     std::ofstream f("/save/soo.txt");
     if (f.is_open()){
@@ -1018,8 +1100,10 @@ extern "C" void save(){
         std::cout<<"ERROR DURING WRITING"<<std::endl;
 }
 
+//main
 int main(){
 
+    //sync system
     EM_ASM(
         FS.mkdir("/save");
         FS.mount(IDBFS,{},"/save");
@@ -1034,13 +1118,16 @@ int main(){
         });
     );
 
+    //initialization
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
     TTF_Init();
 
+    //craete drawing stuff
     win=SDL_CreateWindow("hah",0,0,1000,800,SDL_WINDOW_SHOWN);
     rend=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
 
+    //loading assets
     arial=TTF_OpenFont("assets/arialmt.ttf",100);
     if (!arial){
         std::cerr<<"FAILED TO LOAD FONT ARIAL:"<<TTF_GetError()<<std::endl;
@@ -1057,18 +1144,21 @@ int main(){
     }
 
 
+    //initializing scenes
     m=new Main;
     s=new Second;
     gs=new GameOver;
     ss=new ShopS;
     t=new Third;
 
+    //loading video
     Vid&& l=Vid("/assets/plranim",rend,10);
     v=l;
     std::cout<<"FPS:"<<v.getFPS()<<std::endl;
     currloop=m;
     (*m).player->rect.x=200;
 
+    //START!!!!!
     emscripten_set_main_loop(loop,0,1);
     return 0;
 }
