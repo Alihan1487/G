@@ -231,6 +231,9 @@ class Weapon{
         if (current_cooldown<0)
             current_cooldown=0;
     }
+    virtual Weapon* clone() const{
+        return new Weapon(*this);
+    }
 };
 
 void loop(){
@@ -239,17 +242,14 @@ void loop(){
 
 struct PlayerSave{
     int hp;
-    SDL_Rect rect;
     std::vector<Weapon*> weapons;
     void load_to(PlayerSave& obj){
-        obj.rect=rect;
         obj.weapons.clear();
         for (int i=0;i<weapons.size();i++)
             obj.weapons.push_back(new Weapon(*weapons[i]));
         obj.hp=hp;
     }
     void load_from(PlayerSave& obj){
-        rect=obj.rect;
         weapons.clear();
         for (int i=0;i<obj.weapons.size();i++)
             weapons.push_back(new Weapon(*(obj.weapons[i])));
@@ -308,7 +308,6 @@ class ShopS:public Scene{
             if (e.type==SDL_KEYDOWN){
                 if (e.key.keysym.sym==SDLK_ESCAPE){
                     std::cout<<"ESCAPE"<<std::endl;
-                    sv.rect={0,0,sv.rect.w,sv.rect.h};
                     switch_to(lscene,{});
                 }
             }
@@ -474,8 +473,14 @@ class Main : public Scene{
 
     void On(std::initializer_list<void*> args) override{
         PlayerSave s;
+        for (auto i:m->sprites){
+            if (dynamic_cast<Shop*>(i)){
+                if (SDL_HasIntersection(&plr->rect,&i->rect))
+                    plr->rect.x=0;
+                    plr->rect.y=0;
+            }
+        }
         s.load_from(sv);
-        plr->rect=s.rect;
         plr->weapons.clear();
         plr->hp=sv.hp;
         for (int i=0;i<s.weapons.size();i++)
@@ -484,7 +489,6 @@ class Main : public Scene{
 
     void Off() override{
         PlayerSave s;
-        s.rect=plr->rect;
         s.weapons.clear();
         s.hp=plr->hp;
         for (int i=0;i<plr->weapons.size();i++)
@@ -497,8 +501,9 @@ class Main : public Scene{
         Sprite* p;
         int damage;
         Main* m;
+        int speed;
         public:
-        Enemy(Main* mm,Sprite* player,SDL_Rect r,int d=1) : p(player){
+        Enemy(Main* mm,Sprite* player,SDL_Rect r,int s,int d=1) : p(player),speed(s){
             rect=r;
             alive=true;
             damage=d;
@@ -515,7 +520,7 @@ class Main : public Scene{
                     }
                 } 
             }
-            move(&rect,p->rect.x,p->rect.y,200,dt);
+            move(&rect,p->rect.x,p->rect.y,speed,dt);
             if (SDL_HasIntersection(&rect,&p->rect)){
                 if (!(m->plr->damage_cd>0)){
                     m->plr->hp-=damage;
@@ -532,7 +537,7 @@ class Main : public Scene{
         plr=new Player(this);
         player=plr;
         walls.push_back(new Sprite{{300,300,200,200}});
-        sprites.push_back(new Enemy(this,player,{600,600,50,50}));
+        sprites.push_back(new Enemy(this,player,{600,600,50,50},200));
         sprites.push_back(new Shop{{800,200,100,100}});
     }
 
@@ -543,7 +548,7 @@ class Main : public Scene{
         dt=(start-finish)/1000.f;
         finish=start;
         if (start-lastspawn>2000){
-            sprites.push_back(new Enemy(this,player,{600,600,50,50}));
+            sprites.push_back(new Enemy(this,player,{600,600,50,50},200));
             lastspawn=start;
         }
         while (SDL_PollEvent(&e)){
@@ -609,6 +614,7 @@ class Third : public Scene{
         std::vector<Weapon*> weapons;
         int currwep=0;
         Player(Third* s){
+            alive=true;
             rect={0,0,100,100};
             Weapon* wep=new Weapon(&currloop);
             weapons.push_back(wep);
@@ -704,9 +710,8 @@ class Third : public Scene{
                     weapons[currwep]->reload();
                 }
             if (e.type==SDL_KEYDOWN)
-                if(e.key.keysym.sym==SDLK_f){
+                if(e.key.keysym.sym==SDLK_f)
                     currwep = (currwep + 1) % weapons.size();
-                }
             
         }
         ~Player(){
@@ -715,6 +720,56 @@ class Third : public Scene{
         }
     };
     Player* plr;
+
+    virtual void On(std::initializer_list<void*> list) override{
+        plr->hp=sv.hp;
+        std::cout<<"HP:"<<plr->hp<<std::endl;
+        plr->weapons.clear();
+        for (int i=0;i<sv.weapons.size();i++)
+            plr->weapons.push_back(new Weapon(*(sv.weapons[i])));
+    }
+
+    virtual void Off() override{
+        sv.hp=plr->hp;
+        sv.weapons.clear();
+        for (int i=0;i<plr->weapons.size();i++)
+            sv.weapons.push_back(new Weapon(*(plr->weapons[i])));
+    }
+
+    class Enemy:public Sprite{
+        Sprite* p;
+        int damage;
+        Third* m;
+        int speed;
+        public:
+        Enemy(Third* mm,Sprite* player,SDL_Rect r,int s,int d=1) : p(player),speed(s){
+            rect=r;
+            alive=true;
+            damage=d;
+            m=mm;
+        }
+        void update() override{
+            if (!alive)
+                return;
+            for (auto& i:m->sprites){
+                if (auto j=dynamic_cast<Bullet*>(i)){
+                    if (SDL_HasIntersection(&i->rect,&rect)){
+                        alive=false;
+                        j->alive=false;
+                    }
+                } 
+            }
+            move(&rect,p->rect.x,p->rect.y,200,dt);
+            if (SDL_HasIntersection(&rect,&p->rect)){
+                if (!(m->plr->damage_cd>0)){
+                    m->plr->hp-=damage;
+                    m->plr->damage_cd=2.f;
+                }
+            }
+            SDL_SetRenderDrawColor(rend,0,255,0,255);
+            SDL_RenderFillRect(rend,&rect);
+        }
+    };
     Third(){
         plr=new Player(this);
         walls.push_back(new Sprite({400,400,200,300}));
@@ -724,9 +779,7 @@ class Third : public Scene{
         for (auto i:sprites)
             delete i;
     }
-    void On(std::initializer_list<void*> list) override{
-        std::cout<<"Third turned on"<<std::endl;
-    }
+    int lastspawn=0;
     void update() override{
         Scene::start=SDL_GetTicks();
         dt=(Scene::start-Scene::finish)/1000.f;
@@ -740,13 +793,25 @@ class Third : public Scene{
                     switch_to(s,{});
             for (auto& i:sprites)
                 i->evupdate(e);
+            plr->evupdate(e);
+        }
+
+        if (start>lastspawn+2000){
+            sprites.push_back(new Enemy(this,plr,{1000,0,200,200},300,2));
+            lastspawn=start;
         }
 
         SDL_SetRenderDrawColor(rend,0,0,0,255);
         SDL_RenderClear(rend);
 
-        for (auto i:sprites)
+        std::vector<Sprite*> real;
+        for (auto& i:sprites){
+            if (!i->alive)
+                continue;
             i->update();
+            real.push_back(i);
+        }
+        sprites=real;
         plr->update();
         for (auto i:walls){
             SDL_SetRenderDrawColor(rend,0,255,0,255);
@@ -909,9 +974,10 @@ class GameOver:public Scene{
             if (e.type == SDL_KEYDOWN){
                 delete m;
                 m = new Main;
-                sv.rect.x=0;
-                sv.rect.y=0;
                 sv.hp=5;
+                for (auto i:sv.weapons)
+                    delete i;
+                sv.weapons.clear();
                 switch_to(m,{});
             }
         }
@@ -999,7 +1065,6 @@ int main(){
 
     Vid&& l=Vid("/assets/plranim",rend,10);
     v=l;
-    std::cout<<"LOADED "<<v.size()<<" FRAMES"<<std::endl;
     std::cout<<"FPS:"<<v.getFPS()<<std::endl;
     currloop=m;
     (*m).player->rect.x=200;
