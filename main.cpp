@@ -16,6 +16,7 @@ SDL_Renderer* rend;
 SDL_Window* win;
 TTF_Font* arial;
 SDL_Texture* plrtxt;
+SDL_Texture* enemytxt;
 float dt=0;
 
 //Loades frames from folder and reads meta.txt
@@ -489,6 +490,8 @@ class Main : public Scene{
                 }
             }
             //render
+
+            
             //if damaged
             if (damage_cd>0){
                 SDL_SetRenderDrawColor(rend,255,0,0,255);
@@ -598,8 +601,7 @@ class Main : public Scene{
                     m->plr->damage_cd=2.f;
                 }
             }
-            SDL_SetRenderDrawColor(rend,0,255,0,255);
-            SDL_RenderFillRect(rend,&rect);
+            SDL_RenderCopy(rend,enemytxt,nullptr,&rect);
         }
     };
 
@@ -844,8 +846,7 @@ class Third : public Scene{
                     m->plr->damage_cd=2.f;
                 }
             }
-            SDL_SetRenderDrawColor(rend,0,255,0,255);
-            SDL_RenderFillRect(rend,&rect);
+            SDL_RenderCopy(rend,enemytxt,nullptr,&rect);
         }
     };
     //ctor
@@ -1141,6 +1142,15 @@ int main(){
             return 1;
         }
         plrtxt=SDL_CreateTextureFromSurface(rend,ss);
+    }
+
+    {
+        SDL_Surface* ss=IMG_Load("assets/enemy.png");
+        if (!ss){
+            std::cerr<<"COULDNT LOAD ENEMY IMAGE CAUSE:"<<IMG_GetError()<<std::endl;
+            return 1;
+        }
+        enemytxt=SDL_CreateTextureFromSurface(rend,ss);
     }
 
 
